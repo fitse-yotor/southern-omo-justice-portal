@@ -6,7 +6,9 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean)
-  .filter(f => /\.(m?[jt]sx?|cjs|json|css|sh|py|ya?ml|html|md)$/.test(f) && f !== 'package-lock.json');
+  .filter(f => /\.(m?[jt]sx?|cjs|json|css|sh|py|ya?ml|html|md)$/.test(f))
+  // This script and the incident notes quote the malicious patterns on purpose.
+  .filter(f => !['package-lock.json', 'scripts/security-guard.mjs', 'SECURITY.md'].includes(f));
 
 const rules = [
   ['code hidden after a long whitespace run', /\S[ \t]{150,}\S/],
