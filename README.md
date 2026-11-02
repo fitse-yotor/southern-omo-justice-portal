@@ -14,7 +14,7 @@ New staff/researcher workspace at **`/dashboard`** (sign in at `/dashboard/login
 | Researcher (payment pending) | lidya.haile@example.com | Demo@123 |
 | Content Editor | editor@southomo.gov.et | Demo@123 |
 
-- **Digital library** – folders/categories, PDF/Word/video upload, public vs researcher-only visibility, researcher self-registration, 200 ETB Telebirr receipt upload and approval, researcher contributions reviewed before publishing. Public page at `/library`.
+- **Digital library** – folders/categories, PDF/Word/video upload, public vs researcher-only visibility, researcher self-registration, 200 ETB Telebirr receipt upload and approval, researcher contributions reviewed before publishing. Signed-out visitors see an information page at `/library` (no documents) with sign-in and registration; documents are listed only after sign-in. Approvals page shows payments and contributions in a grid with status, View (detail with receipt image/PDF preview) and Approve/Reject confirmation popups.
 - **Prosecution portal** – Director and prosecutors create cases; Director sets SLA days per case category; status updates are locked for prosecutors once a case is overdue until the Director extends the SLA; Director comments; prosecutors submit daily/weekly/monthly reports and the Director gives feedback.
 - **Super Admin** – user creation/activation/password reset, role creation with a permission matrix, audit log, settings (fee, Telebirr code, SLA warning days).
 - **Personal dashboards** for every role, notifications, profile/password.

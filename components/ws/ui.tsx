@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, Clock, Download, FileText, FileType2, Film, Inbox, Lock, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useFileUrl, fmtSize } from '@/lib/ws/files';
+import { PdfView } from './pdf-view';
 import { slaState, daysLeft, useWS } from '@/lib/ws/store';
 import type { Case, LibDoc } from '@/lib/ws/types';
 
@@ -72,7 +73,7 @@ export function DocViewer({ doc, onClose, locked }: { doc: LibDoc | null; onClos
     {locked ? <div className="viewer-locked"><Lock size={34} /><h3>Researcher access required</h3><p>This document is available to approved researchers. Register, pay the library fee with Telebirr and upload your receipt.</p><Link className="ws-btn" href="/dashboard/register">Register as researcher</Link><Link className="ws-btn ghost" href="/dashboard/login">Sign in</Link></div>
       : <div className="viewer-body">
         {doc.description && <p className="viewer-desc">{doc.description}</p>}
-        {!url ? <p>Loading file…</p> : doc.type === 'pdf' ? <iframe src={url} title={doc.title} className="viewer-frame" /> : doc.type === 'video' ? <video src={url} controls className="viewer-video" /> :
+        {!url ? <p>Loading file…</p> : doc.type === 'pdf' ? <PdfView url={url} className="viewer-frame" /> : doc.type === 'video' ? <video src={url} controls className="viewer-video" /> :
           <div className="viewer-word"><FileType2 size={48} /><p>Word documents open in Microsoft Word, LibreOffice or Google Docs after download.</p></div>}
         {url && <a className="ws-btn" href={url} download={doc.fileName} onClick={() => actions.trackDoc(doc.id, 'downloads')}><Download size={16} />Download {doc.type === 'word' ? 'Word file' : doc.type === 'video' ? 'video' : 'PDF'}</a>}
       </div>}

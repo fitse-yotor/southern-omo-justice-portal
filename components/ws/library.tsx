@@ -1,12 +1,13 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, ChevronRight, Clock, Eye, Folder, FolderOpen, FolderPlus, Lock, Pencil, Plus, Search, Trash2, Upload, Wallet, XCircle, Download } from 'lucide-react';
+import { BookUp, CheckCircle2, ChevronRight, Clock, Eye, FileText, Folder, FolderOpen, FolderPlus, Image as ImageIcon, Lock, Pencil, Plus, Search, Trash2, Upload, Wallet, XCircle, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWS } from '@/lib/ws/store';
+import { PdfView } from './pdf-view';
 import { ACCEPT_DOCS, detectType, fmtSize, saveFile, useFileUrl } from '@/lib/ws/files';
 import type { LibDoc } from '@/lib/ws/types';
-import { DataTable, DocIcon, DocViewer, Empty, F, Modal, PageHead, Panel, Pill, Sel, StatusPill, ago, fmtDate } from './ui';
+import { Avatar, DataTable, DocIcon, DocViewer, Empty, F, Modal, PageHead, Panel, Pill, Sel, Stat, StatusPill, ago, fmtDate } from './ui';
 
 export function useQueryParam(name: string) {
   const [v, setV] = useState<string | null>(null);
@@ -166,58 +167,170 @@ function FolderRow({ c, onEdit, onAddSub }: { c: { id: string; name: string; des
 }
 
 /* ---------------- Library admin: approvals ---------------- */
+type Decision = { kind: 'pay' | 'doc'; id: string; approve: boolean } | null;
+type Detail = { kind: 'pay' | 'doc'; id: string } | null;
+const STATUS_TABS = [['pending', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['all', 'All']] as const;
+
 export function LibraryApprovals() {
-  const { data, actions, userName } = useWS();
+  const { data, userName } = useWS();
   const tabParam = useQueryParam('tab');
-  const [tab, setTab] = useState<'payments' | 'contributions' | 'history'>('payments');
+  const [tab, setTab] = useState<'payments' | 'contributions'>('payments');
   useEffect(() => { if (tabParam === 'contributions') setTab('contributions'); }, [tabParam]);
-  const [review, setReview] = useState<{ kind: 'pay' | 'doc'; id: string; approve: boolean } | null>(null);
-  const [note, setNote] = useState(''), [vis, setVis] = useState<LibDoc['visibility']>('researchers'), [view, setView] = useState<LibDoc | null>(null);
-  const pays = data.payments.filter(p => p.status === 'pending'), docs = data.docs.filter(d => d.status === 'pending');
-  const history = [
-    ...data.payments.filter(p => p.status !== 'pending').map(p => ({ id: p.id, at: p.reviewedAt || p.createdAt, what: `Payment ${p.txnId} · ${userName(p.userId)}`, status: p.status, by: p.reviewedBy, note: p.note })),
-    ...data.docs.filter(d => d.source === 'researcher' && d.status !== 'pending').map(d => ({ id: d.id, at: d.publishedAt || d.createdAt, what: `Contribution “${d.title}” · ${userName(d.uploadedBy)}`, status: d.status, by: d.reviewedBy, note: d.reviewNote })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
+  const [status, setStatus] = useState<string>('all'), [q, setQ] = useState('');
+  const [detail, setDetail] = useState<Detail>(null), [decision, setDecision] = useState<Decision>(null);
+
+  const contribs = data.docs.filter(d => d.source === 'researcher');
+  const docStatus = (s: LibDoc['status']) => (s === 'published' ? 'approved' : s);
+  const payRows = data.payments.filter(p => (status === 'all' || p.status === status) && (userName(p.userId) + ' ' + p.txnId).toLowerCase().includes(q.toLowerCase()));
+  const docRows = contribs.filter(d => (status === 'all' || docStatus(d.status) === status) && (d.title + ' ' + userName(d.uploadedBy)).toLowerCase().includes(q.toLowerCase()));
+  const order = (s: string) => (s === 'pending' ? 0 : 1);
+  payRows.sort((a, b) => order(a.status) - order(b.status) || b.createdAt.localeCompare(a.createdAt));
+  docRows.sort((a, b) => order(a.status) - order(b.status) || b.createdAt.localeCompare(a.createdAt));
+  const pendPay = data.payments.filter(p => p.status === 'pending').length, pendDoc = contribs.filter(d => d.status === 'pending').length;
+  const count = (st: string) => tab === 'payments' ? data.payments.filter(p => st === 'all' || p.status === st).length : contribs.filter(d => st === 'all' || docStatus(d.status) === st).length;
+
   return <>
-    <PageHead eyebrow="LIBRARY ADMIN" title="Approvals">Verify researcher Telebirr receipts and review contributed research before publishing.</PageHead>
-    <div className="ws-tabs" role="tablist">
-      <button role="tab" aria-selected={tab === 'payments'} onClick={() => setTab('payments')}>Researcher payments <em className={pays.length ? 'hot' : ''}>{pays.length}</em></button>
-      <button role="tab" aria-selected={tab === 'contributions'} onClick={() => setTab('contributions')}>Contributions <em className={docs.length ? 'hot' : ''}>{docs.length}</em></button>
-      <button role="tab" aria-selected={tab === 'history'} onClick={() => setTab('history')}>History</button>
+    <PageHead eyebrow="LIBRARY ADMIN" title="Approvals">Verify researcher Telebirr receipts and review contributed research. Open a row to see the full details and receipt, then approve or reject.</PageHead>
+    <div className="ws-stats">
+      <Stat label="Payments to verify" value={pendPay} tone="gold" icon={<Wallet />} />
+      <Stat label="Contributions to review" value={pendDoc} tone="gold" icon={<BookUp />} />
+      <Stat label="Active researchers" value={data.payments.filter(p => p.status === 'approved').length} icon={<CheckCircle2 />} />
+      <Stat label="Fees collected" value={data.payments.filter(p => p.status === 'approved').reduce((s, p) => s + p.amount, 0) + ' ETB'} tone="ink" icon={<Wallet />} />
     </div>
-    {tab === 'payments' && (pays.length ? <div className="ws-cards">{pays.map(p => { const u = data.users.find(x => x.id === p.userId); return <article key={p.id} className="ws-card">
-      <header><Wallet size={20} /><div><b>{u?.name}</b><small>{u?.institution} · {u?.email}</small></div><Pill tone="gold">Pending</Pill></header>
-      <dl className="ws-dl"><dt>Amount</dt><dd>{p.amount} ETB</dd><dt>Telebirr transaction</dt><dd className="mono">{p.txnId}</dd><dt>Paid on</dt><dd>{fmtDate(p.paidOn)}</dd><dt>Phone</dt><dd>{u?.phone}</dd><dt>Purpose</dt><dd>{u?.purpose}</dd><dt>Submitted</dt><dd>{ago(p.createdAt)}</dd></dl>
-      <ReceiptLink url={p.receiptUrl} name={p.receiptName} />
-      <footer><button className="ws-btn danger ghost" onClick={() => { setNote(''); setReview({ kind: 'pay', id: p.id, approve: false }); }}><XCircle size={16} />Reject</button><button className="ws-btn" onClick={() => { setNote('Receipt verified against Telebirr statement.'); setReview({ kind: 'pay', id: p.id, approve: true }); }}><CheckCircle2 size={16} />Approve access</button></footer>
-    </article>; })}</div> : <Empty title="No payments waiting" icon={<CheckCircle2 size={30} />}>New Telebirr receipts will appear here.</Empty>)}
-    {tab === 'contributions' && (docs.length ? <div className="ws-cards">{docs.map(d => <article key={d.id} className="ws-card">
-      <header><DocIcon type={d.type} size={22} /><div><b>{d.title}</b><small>by {userName(d.uploadedBy)} · {ago(d.createdAt)}</small></div><Pill tone="gold">Pending</Pill></header>
-      <p>{d.description}</p>
-      <dl className="ws-dl"><dt>Proposed folder</dt><dd>{data.categories.find(c => c.id === d.categoryId)?.name}</dd><dt>File</dt><dd>{d.fileName} · {fmtSize(d.size)}</dd><dt>Author</dt><dd>{d.author}, {d.year}</dd></dl>
-      <button className="ws-btn ghost sm" onClick={() => setView(d)}><Eye size={15} />Preview file</button>
-      <footer><button className="ws-btn danger ghost" onClick={() => { setNote(''); setReview({ kind: 'doc', id: d.id, approve: false }); }}><XCircle size={16} />Reject</button><button className="ws-btn" onClick={() => { setNote('Approved for publication.'); setVis('public'); setReview({ kind: 'doc', id: d.id, approve: true }); }}><CheckCircle2 size={16} />Approve & publish</button></footer>
-    </article>)}</div> : <Empty title="No contributions waiting" icon={<CheckCircle2 size={30} />} />)}
-    {tab === 'history' && <Panel><DataTable head={['Date', 'Item', 'Decision', 'Reviewed by', 'Note']} empty={!history.length}>{history.map(h => <tr key={h.id}><td>{fmtDate(h.at)}</td><td>{h.what}</td><td><StatusPill status={h.status} /></td><td>{userName(h.by)}</td><td>{h.note}</td></tr>)}</DataTable></Panel>}
-    <Modal open={!!review} onClose={() => setReview(null)} title={review?.approve ? (review.kind === 'pay' ? 'Approve payment & grant access' : 'Approve & publish contribution') : 'Reject'} description={review?.approve ? (review?.kind === 'pay' ? `The researcher gets full library access for ${data.settings.accessDays} days.` : 'The document becomes visible in the library.') : 'The researcher will see your reason.'}>
-      {review && <form className="ws-form" onSubmit={e => {
-        e.preventDefault();
-        if (!review.approve && !note.trim()) return toast.error('Please give a reason.');
-        if (review.kind === 'pay') actions.reviewPayment(review.id, review.approve, note); else actions.reviewDoc(review.id, review.approve, note, vis);
-        toast.success(review.approve ? 'Approved' : 'Rejected'); setReview(null);
-      }}>
-        {review.kind === 'doc' && review.approve && <F label="Publish for"><Sel value={vis} onChange={v => setVis(v as LibDoc['visibility'])} options={[['public', 'All users (public)'], ['researchers', 'Researchers & staff only']]} /></F>}
-        <F label={review.approve ? 'Note (optional)' : 'Reason for rejection'}><textarea className="ws-input" rows={3} value={note} onChange={e => setNote(e.target.value)} /></F>
-        <div className="ws-form-actions"><button type="button" className="ws-btn ghost" onClick={() => setReview(null)}>Cancel</button><button className={'ws-btn' + (review.approve ? '' : ' danger')}>{review.approve ? 'Confirm approval' : 'Reject'}</button></div>
-      </form>}
-    </Modal>
-    <DocViewer doc={view} onClose={() => setView(null)} />
+    <div className="ws-tabs" role="tablist">
+      <button role="tab" aria-selected={tab === 'payments'} onClick={() => setTab('payments')}><Wallet size={16} />Researcher payments <em className={pendPay ? 'hot' : ''}>{pendPay}</em></button>
+      <button role="tab" aria-selected={tab === 'contributions'} onClick={() => setTab('contributions')}><BookUp size={16} />Research contributions <em className={pendDoc ? 'hot' : ''}>{pendDoc}</em></button>
+    </div>
+    <Panel>
+      <div className="ws-filters">
+        <div className="ws-chips inline">{STATUS_TABS.map(([k, l]) => <button key={k} aria-pressed={status === k} className={'chip-' + k} onClick={() => setStatus(k)}>{l}<em>{count(k)}</em></button>)}</div>
+        <div className="lib-search"><Search size={16} /><input placeholder={tab === 'payments' ? 'Search researcher or transaction ID' : 'Search title or researcher'} value={q} onChange={e => setQ(e.target.value)} /></div>
+      </div>
+      {tab === 'payments' ? <div className="ws-table-wrap"><table className="ws-table cards-on-mobile appr">
+        <thead><tr><th>Researcher</th><th>Transaction ID</th><th>Amount</th><th>Receipt</th><th>Submitted</th><th>Status</th><th className="ta-r">Actions</th></tr></thead>
+        <tbody>{payRows.map(p => { const u = data.users.find(x => x.id === p.userId); return <tr key={p.id} className={p.status === 'pending' ? 'row-pending' : ''}>
+          <td data-label="Researcher"><button className="ws-user-cell linkish" onClick={() => setDetail({ kind: 'pay', id: p.id })}><Avatar name={u?.name || '?'} size={34} /><span><b>{u?.name}</b><small>{u?.institution}</small></span></button></td>
+          <td data-label="Transaction" className="mono">{p.txnId}</td>
+          <td data-label="Amount"><b>{p.amount} ETB</b></td>
+          <td data-label="Receipt"><FileBadge name={p.receiptName} /></td>
+          <td data-label="Submitted">{fmtDate(p.createdAt)}<small className="ws-sub">{ago(p.createdAt)}</small></td>
+          <td data-label="Status"><StatusPill status={p.status} /></td>
+          <td className="ws-actions"><RowActions pending={p.status === 'pending'} onView={() => setDetail({ kind: 'pay', id: p.id })} onApprove={() => setDecision({ kind: 'pay', id: p.id, approve: true })} onReject={() => setDecision({ kind: 'pay', id: p.id, approve: false })} /></td>
+        </tr>; })}</tbody>
+      </table>{!payRows.length && <Empty title="No payments in this view" icon={<CheckCircle2 size={30} />} />}</div>
+        : <div className="ws-table-wrap"><table className="ws-table cards-on-mobile appr">
+          <thead><tr><th>Document</th><th>Researcher</th><th>Folder</th><th>Submitted</th><th>Status</th><th className="ta-r">Actions</th></tr></thead>
+          <tbody>{docRows.map(d => <tr key={d.id} className={d.status === 'pending' ? 'row-pending' : ''}>
+            <td data-label="Document"><button className="ws-doc-cell" onClick={() => setDetail({ kind: 'doc', id: d.id })}><DocIcon type={d.type} size={24} /><span><b>{d.title}</b><small>{d.fileName} · {fmtSize(d.size)}</small></span></button></td>
+            <td data-label="Researcher">{userName(d.uploadedBy)}</td>
+            <td data-label="Folder">{data.categories.find(c => c.id === d.categoryId)?.name}</td>
+            <td data-label="Submitted">{fmtDate(d.createdAt)}<small className="ws-sub">{ago(d.createdAt)}</small></td>
+            <td data-label="Status"><StatusPill status={docStatus(d.status)} /></td>
+            <td className="ws-actions"><RowActions pending={d.status === 'pending'} onView={() => setDetail({ kind: 'doc', id: d.id })} onApprove={() => setDecision({ kind: 'doc', id: d.id, approve: true })} onReject={() => setDecision({ kind: 'doc', id: d.id, approve: false })} /></td>
+          </tr>)}</tbody>
+        </table>{!docRows.length && <Empty title="No contributions in this view" icon={<CheckCircle2 size={30} />} />}</div>}
+    </Panel>
+    <ApprovalDetail detail={detail} onClose={() => setDetail(null)} onDecide={(approve) => detail && setDecision({ ...detail, approve })} />
+    <DecisionDialog decision={decision} onClose={() => setDecision(null)} onDone={() => { setDecision(null); setDetail(null); }} />
   </>;
 }
-function ReceiptLink({ url, name }: { url: string; name: string }) {
+
+function RowActions({ pending, onView, onApprove, onReject }: { pending: boolean; onView: () => void; onApprove: () => void; onReject: () => void }) {
+  return <div className="ws-act-group">
+    <button className="ws-btn sm ghost" onClick={onView}><Eye size={15} />View</button>
+    {pending && <><button className="ws-btn sm" onClick={onApprove}><CheckCircle2 size={15} />Approve</button><button className="ws-btn sm danger ghost" onClick={onReject} aria-label="Reject"><XCircle size={15} />Reject</button></>}
+  </div>;
+}
+
+export function FileBadge({ name }: { name: string }) {
+  const img = /\.(png|jpe?g|webp|gif)$/i.test(name);
+  return <span className={'ws-file-badge ' + (img ? 'img' : 'pdf')}>{img ? <ImageIcon size={14} /> : <FileText size={14} />}{img ? 'Image' : 'PDF'}</span>;
+}
+
+export function ReceiptPreview({ url, name }: { url: string; name: string }) {
   const u = useFileUrl(url);
   const img = /\.(png|jpe?g|webp|gif)$/i.test(name);
-  return <div className="ws-receipt">{img && u ? <img src={u} alt="Telebirr receipt" /> : null}<a className="ws-btn ghost sm" href={u || '#'} target="_blank" rel="noreferrer"><Eye size={15} />Open receipt · {name}</a></div>;
+  if (!u) return <div className="ws-receipt-frame loading">Loading receipt…</div>;
+  return <div className="ws-receipt-frame">
+    {img ? <img src={u} alt={'Receipt ' + name} /> : <PdfView url={u} maxPages={3} />}
+    <a className="ws-btn ghost sm" href={u} target="_blank" rel="noreferrer" download={name}><Download size={14} />Open / download {img ? 'image' : 'PDF'}</a>
+  </div>;
+}
+
+function ApprovalDetail({ detail, onClose, onDecide }: { detail: Detail; onClose: () => void; onDecide: (approve: boolean) => void }) {
+  const { data, userName } = useWS();
+  if (!detail) return null;
+  if (detail.kind === 'pay') {
+    const p = data.payments.find(x => x.id === detail.id); if (!p) return null;
+    const u = data.users.find(x => x.id === p.userId);
+    const history = data.payments.filter(x => x.userId === p.userId && x.id !== p.id);
+    return <Modal open onClose={onClose} title="Payment verification" description={`${u?.name} · ${p.amount} ETB · Telebirr ${p.txnId}`} wide>
+      <div className="ws-approval-detail">
+        <ReceiptPreview url={p.receiptUrl} name={p.receiptName} />
+        <div className="ws-approval-info">
+          <div className="ws-approval-status"><StatusPill status={p.status} />{p.reviewedAt && <small>{p.status === 'approved' ? 'Approved' : 'Reviewed'} by {userName(p.reviewedBy)} · {fmtDate(p.reviewedAt)}</small>}</div>
+          <h4>Researcher</h4>
+          <dl className="ws-dl"><dt>Name</dt><dd>{u?.name}</dd><dt>Institution</dt><dd>{u?.institution}</dd><dt>Email</dt><dd>{u?.email}</dd><dt>Phone</dt><dd>{u?.phone}</dd><dt>Purpose</dt><dd>{u?.purpose}</dd></dl>
+          <h4>Payment</h4>
+          <dl className="ws-dl"><dt>Amount</dt><dd><b>{p.amount} ETB</b></dd><dt>Transaction ID</dt><dd className="mono">{p.txnId}</dd><dt>Paid on</dt><dd>{fmtDate(p.paidOn)}</dd><dt>Submitted</dt><dd>{fmtDate(p.createdAt)} ({ago(p.createdAt)})</dd><dt>Receipt file</dt><dd><FileBadge name={p.receiptName} /> {p.receiptName}</dd>{p.expiresAt && <><dt>Access until</dt><dd>{fmtDate(p.expiresAt)}</dd></>}</dl>
+          {p.note && <p className="ws-note"><b>Review note:</b> {p.note}</p>}
+          {history.length > 0 && <p className="ws-sub">Previous submissions: {history.map(h => `${h.txnId} (${h.status})`).join(', ')}</p>}
+          {p.status === 'pending' && <div className="ws-approval-actions"><button className="ws-btn danger ghost" onClick={() => onDecide(false)}><XCircle size={16} />Reject</button><button className="ws-btn" onClick={() => onDecide(true)}><CheckCircle2 size={16} />Approve access</button></div>}
+        </div>
+      </div>
+    </Modal>;
+  }
+  const d = data.docs.find(x => x.id === detail.id); if (!d) return null;
+  return <Modal open onClose={onClose} title="Research contribution" description={`${d.title} · by ${userName(d.uploadedBy)}`} wide>
+    <div className="ws-approval-detail">
+      <DocPreview doc={d} />
+      <div className="ws-approval-info">
+        <div className="ws-approval-status"><StatusPill status={d.status === 'published' ? 'approved' : d.status} />{d.reviewedBy && <small>Reviewed by {userName(d.reviewedBy)}</small>}</div>
+        <h4>Document</h4>
+        <dl className="ws-dl"><dt>Title</dt><dd>{d.title}</dd><dt>Description</dt><dd>{d.description || '—'}</dd><dt>Author</dt><dd>{d.author}, {d.year}</dd><dt>Proposed folder</dt><dd>{data.categories.find(c => c.id === d.categoryId)?.name}</dd><dt>File</dt><dd><DocIcon type={d.type} size={15} /> {d.fileName} · {fmtSize(d.size)}</dd><dt>Submitted</dt><dd>{fmtDate(d.createdAt)} ({ago(d.createdAt)})</dd>{d.publishedAt && <><dt>Published</dt><dd>{fmtDate(d.publishedAt)} · {d.visibility === 'public' ? 'All users' : 'Researchers & staff'}</dd></>}</dl>
+        {d.reviewNote && <p className="ws-note"><b>Review note:</b> {d.reviewNote}</p>}
+        {d.status === 'pending' && <div className="ws-approval-actions"><button className="ws-btn danger ghost" onClick={() => onDecide(false)}><XCircle size={16} />Reject</button><button className="ws-btn" onClick={() => onDecide(true)}><CheckCircle2 size={16} />Approve & publish</button></div>}
+      </div>
+    </div>
+  </Modal>;
+}
+
+function DocPreview({ doc }: { doc: LibDoc }) {
+  const u = useFileUrl(doc.url);
+  if (!u) return <div className="ws-receipt-frame loading">Loading…</div>;
+  return <div className="ws-receipt-frame">
+    {doc.type === 'pdf' ? <PdfView url={u} maxPages={5} /> : doc.type === 'video' ? <video src={u} controls /> : <div className="viewer-word"><DocIcon type="word" size={44} /><p>Word document – download to review.</p></div>}
+    <a className="ws-btn ghost sm" href={u} target="_blank" rel="noreferrer" download={doc.fileName}><Download size={14} />Download file</a>
+  </div>;
+}
+
+function DecisionDialog({ decision, onClose, onDone }: { decision: Decision; onClose: () => void; onDone: () => void }) {
+  const { data, actions, userName } = useWS();
+  const [note, setNote] = useState(''), [vis, setVis] = useState<LibDoc['visibility']>('public');
+  useEffect(() => { if (decision) { setNote(decision.approve ? (decision.kind === 'pay' ? 'Receipt verified against the merchant statement.' : 'Approved for publication.') : ''); setVis('public'); } }, [decision]);
+  if (!decision) return null;
+  const p = decision.kind === 'pay' ? data.payments.find(x => x.id === decision.id) : null;
+  const d = decision.kind === 'doc' ? data.docs.find(x => x.id === decision.id) : null;
+  const who = p ? userName(p.userId) : userName(d?.uploadedBy);
+  const title = decision.approve ? (p ? 'Approve payment?' : 'Approve & publish?') : (p ? 'Reject payment?' : 'Reject contribution?');
+  return <Modal open onClose={onClose} title={title}>
+    <form className="ws-form" onSubmit={e => {
+      e.preventDefault();
+      if (!decision.approve && !note.trim()) { toast.error('Please give a reason so the researcher can correct it.'); return; }
+      if (p) actions.reviewPayment(p.id, decision.approve, note); else if (d) actions.reviewDoc(d.id, decision.approve, note, vis);
+      toast.success(decision.approve ? (p ? `Approved — ${who} now has full library access` : `Published “${d?.title}”`) : 'Rejected — the researcher has been notified');
+      onDone();
+    }}>
+      <div className={'ws-confirm ' + (decision.approve ? 'ok' : 'bad')}>
+        {decision.approve ? <CheckCircle2 size={28} /> : <XCircle size={28} />}
+        <div>{p ? <><b>{who}</b> · {p.amount} ETB · <span className="mono">{p.txnId}</span><p>{decision.approve ? `Grants full library access for ${data.settings.accessDays} days and notifies the researcher.` : 'The researcher will be asked to upload a valid receipt.'}</p></>
+          : <><b>{d?.title}</b><p>{decision.approve ? `Publishes the document in the library with ${who} as author.` : 'The researcher will see your reason and can resubmit.'}</p></>}</div>
+      </div>
+      {d && decision.approve && <F label="Publish for"><Sel value={vis} onChange={v => setVis(v as LibDoc['visibility'])} options={[['public', 'All signed-in users'], ['researchers', 'Researchers & staff only']]} /></F>}
+      <F label={decision.approve ? 'Note (optional)' : 'Reason for rejection'}><textarea className="ws-input" rows={3} value={note} onChange={e => setNote(e.target.value)} autoFocus={!decision.approve} /></F>
+      <div className="ws-form-actions"><button type="button" className="ws-btn ghost" onClick={onClose}>Cancel</button><button className={'ws-btn' + (decision.approve ? '' : ' danger')}>{decision.approve ? <><CheckCircle2 size={16} />Yes, approve</> : <><XCircle size={16} />Reject</>}</button></div>
+    </form>
+  </Modal>;
 }
 
 /* ---------------- Researcher: access & payment ---------------- */

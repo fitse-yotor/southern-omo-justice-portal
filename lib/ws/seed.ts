@@ -1,7 +1,7 @@
 import { CASE_STATUSES, PERMISSIONS, type Case, type CaseStatus, type Permission, type WSData } from './types';
 
 const DAY = 86400000;
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 5;
 
 export function seedData(now = Date.now()): WSData {
   const ago = (d: number, h = 9) => { const t = new Date(now - d * DAY); t.setHours(h, (d * 7) % 60, 0, 0); return t.toISOString(); };
@@ -31,6 +31,8 @@ export function seedData(now = Date.now()): WSData {
     u('u-r1', 'Dr. Yonas Bekele', 'researcher@example.com', 'researcher', '—', 90, { institution: 'Jinka University', purpose: 'Customary law and formal justice research' }),
     u('u-r2', 'Lidya Haile', 'lidya.haile@example.com', 'researcher', '—', 4, { institution: 'Arba Minch University', purpose: 'MA thesis on juvenile justice' }),
     u('u-r3', 'Samuel Ayele', 'samuel.ayele@example.com', 'researcher', '—', 1, { institution: 'Independent researcher', purpose: 'Land dispute resolution study' }),
+    u('u-r4', 'Mekdes Alemayehu', 'mekdes.alemayehu@example.com', 'researcher', '—', 2, { institution: 'Addis Ababa University', purpose: 'PhD research on pastoralist land rights' }),
+    u('u-r5', 'Biruk Tesfaye', 'biruk.tesfaye@example.com', 'researcher', '—', 14, { institution: 'Wolaita Sodo University', purpose: 'Comparative study of legal aid services' }),
     u('u-cms', 'Tigist Worku', 'editor@southomo.gov.et', 'content-editor', 'Zone office (Jinka)', 210),
     u('u-co', 'Mulugeta Asfaw', 'complaints@southomo.gov.et', 'complaint-officer', 'Zone office (Jinka)', 205),
     u('u-p4', 'Kebede Lemma', 'kebede.lemma@southomo.gov.et', 'prosecutor', 'Male', 400, { status: 'inactive' }),
@@ -65,12 +67,16 @@ export function seedData(now = Date.now()): WSData {
     doc('Complaint Form', 'c-forms', 'pdf', '/samples/complaint-form.pdf', 2428, 'public', 150, { description: 'Printable complaint submission form.' }),
     doc('Information Request Form', 'c-forms', 'pdf', '/samples/information-request.pdf', 2319, 'public', 140, { description: 'Request access to public information.' }),
     doc('Customary Law and Formal Justice in South Omo', 'c-research-cust', 'word', '/library/research-customary-law.docx', 3400, 'researchers', 20, { description: 'Interaction between elders’ councils and woreda justice offices.', source: 'researcher', uploadedBy: 'u-r1', author: 'Dr. Yonas Bekele', reviewedBy: 'u-lib' }),
+    doc('Juvenile Justice Practice in South Omo: A Field Survey', 'c-research-crim', 'word', '/library/research-customary-law.docx', 3400, 'researchers', 1, { description: 'Field survey of juvenile case handling in four woredas, with recommendations.', source: 'researcher', uploadedBy: 'u-r1', author: 'Dr. Yonas Bekele', status: 'pending', publishedAt: undefined, views: 0, downloads: 0 }),
+    doc('Notes on Court Fees (draft)', 'c-research-crim', 'pdf', '/samples/information-request.pdf', 2319, 'researchers', 25, { description: 'Short draft note on court fee practice.', source: 'researcher', uploadedBy: 'u-r1', author: 'Dr. Yonas Bekele', status: 'rejected', publishedAt: undefined, reviewedBy: 'u-lib', reviewNote: 'Too short for publication. Please expand with sources and resubmit.', views: 0, downloads: 0 }),
     doc('Public Legal Awareness in Pastoralist Communities', 'c-research-crim', 'pdf', '/samples/legal-awareness.pdf', 2485, 'researchers', 3, { description: 'Survey of legal awareness campaigns in Hamer and Dasenech.', source: 'researcher', uploadedBy: 'u-r1', author: 'Dr. Yonas Bekele', status: 'pending', publishedAt: undefined, views: 0, downloads: 0 }),
   ];
 
   const payments: WSData['payments'] = [
-    { id: 'pay-1', userId: 'u-r1', amount: 200, txnId: 'TB8K2LQ91X', receiptUrl: '/samples/information-request.pdf', receiptName: 'telebirr-receipt-TB8K2LQ91X.pdf', paidOn: ago(89), status: 'approved', createdAt: ago(89), reviewedBy: 'u-lib', reviewedAt: ago(88), expiresAt: addDays(ago(88), 365), note: 'Receipt verified.' },
-    { id: 'pay-2', userId: 'u-r2', amount: 200, txnId: 'TB9P4MZ27Q', receiptUrl: '/samples/complaint-form.pdf', receiptName: 'telebirr-receipt-TB9P4MZ27Q.pdf', paidOn: ago(2), status: 'pending', createdAt: ago(2) },
+    { id: 'pay-1', userId: 'u-r1', amount: 200, txnId: 'TB8K2LQ91X', receiptUrl: '/receipts/receipt-TB8K2LQ91X.pdf', receiptName: 'receipt-TB8K2LQ91X.pdf', paidOn: ago(89), status: 'approved', createdAt: ago(89), reviewedBy: 'u-lib', reviewedAt: ago(88), expiresAt: addDays(ago(88), 365), note: 'Receipt verified against the merchant statement.' },
+    { id: 'pay-2', userId: 'u-r2', amount: 200, txnId: 'TB9P4MZ27Q', receiptUrl: '/receipts/receipt-TB9P4MZ27Q.png', receiptName: 'receipt-TB9P4MZ27Q.png', paidOn: ago(2), status: 'pending', createdAt: ago(2) },
+    { id: 'pay-3', userId: 'u-r4', amount: 200, txnId: 'TC1R7KD55W', receiptUrl: '/receipts/receipt-TC1R7KD55W.pdf', receiptName: 'receipt-TC1R7KD55W.pdf', paidOn: ago(1), status: 'pending', createdAt: ago(1, 10) },
+    { id: 'pay-4', userId: 'u-r5', amount: 200, txnId: 'TA00BAD1', receiptUrl: '/receipts/receipt-TA00BAD1.jpg', receiptName: 'receipt-TA00BAD1.jpg', paidOn: ago(13), status: 'rejected', createdAt: ago(13), reviewedBy: 'u-lib', reviewedAt: ago(12), note: 'Transaction ID was not found in the merchant statement. Please upload the correct receipt.' },
   ];
 
   const caseCategories: WSData['caseCategories'] = [
@@ -151,6 +157,7 @@ export function seedData(now = Date.now()): WSData {
   });
 
   const notifications: WSData['notifications'] = [
+    { id: 'n-0', userId: 'u-lib', text: 'Mekdes Alemayehu uploaded a Telebirr receipt for review.', link: '/dashboard/library/approvals', at: ago(1, 10), read: false },
     { id: 'n-1', userId: 'u-lib', text: 'Lidya Haile uploaded a Telebirr receipt for review.', link: '/dashboard/library/approvals', at: ago(2), read: false },
     { id: 'n-2', userId: 'u-lib', text: 'Dr. Yonas Bekele submitted a contribution: “Public Legal Awareness in Pastoralist Communities”.', link: '/dashboard/library/approvals', at: ago(3), read: false },
     { id: 'n-3', userId: 'u-p1', text: 'Director commented on SOZ/PR/0142 (Domestic violence complaint).', link: '/dashboard/cases/case-3', at: ago(10), read: false },

@@ -1,7 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, BadgeCheck, Briefcase, CalendarDays, FileText, Gavel, HandHeart, Landmark, Megaphone, Scale, ScrollText, ShieldCheck, Users } from 'lucide-react';
+import { ArrowRight, BadgeCheck, BarChart3, BookOpen, Briefcase, CalendarDays, FileText, Film, Folder, Gavel, HandHeart, Landmark, Lock, LogIn, Megaphone, Scale, ScrollText, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useWS } from '@/lib/ws/store';
 import { LibraryExplorer } from '@/components/ws/library';
 import { DocIcon, DocViewer } from '@/components/ws/ui';
@@ -82,10 +82,11 @@ function Listing({ title, intro, items, icon }: { t: T; title: string; intro: st
     <Sample />
   </>;
 }
-function MediaDocs({ title, intro, filter }: { t: T; title: string; intro: string; filter: (d: LibDoc) => boolean }) {
-  const { ready, data } = useWS();
+function MediaDocs({ t, title, intro, filter }: { t: T; title: string; intro: string; filter: (d: LibDoc) => boolean }) {
+  const { ready, data, user } = useWS();
   const [open, setOpen] = useState<LibDoc | null>(null);
   if (!ready) return <Intro title={title}>{intro}</Intro>;
+  if (!user) return <LibraryLanding t={t} compact={title} />;
   const docs = data.docs.filter(d => d.status === 'published' && d.visibility === 'public' && filter(d));
   const locked = data.docs.filter(d => d.status === 'published' && d.visibility === 'researchers' && filter(d)).length;
   return <>
@@ -99,17 +100,68 @@ function MediaDocs({ title, intro, filter }: { t: T; title: string; intro: strin
 }
 
 function PublicLibrary({ t }: { t: T }) {
-  const { ready, data, hasLibraryAccess, user } = useWS();
+  const { ready, user, hasLibraryAccess } = useWS();
+  if (!ready) return <Intro eyebrow="DIGITAL LIBRARY" title={t('Digital Library', 'ዲጂታል ቤተ መጻሕፍት')} />;
+  if (!user) return <LibraryLanding t={t} />;
   return <>
-    <Intro eyebrow="DIGITAL LIBRARY" title={t('Digital Library', 'ዲጂታል ቤተ መጻሕፍት')}>Laws, research papers, manuals, annual reports and training videos. Public documents are open to everyone; researcher-only documents require a researcher account.</Intro>
-    {ready ? <>
-      <div className="sp-lib-cta">
-        <div><b>{data.docs.filter(d => d.status === 'published').length}</b><span>documents</span></div>
-        <div><b>{data.categories.filter(c => !c.parentId).length}</b><span>folders</span></div>
-        <div><b>{data.docs.filter(d => d.source === 'researcher' && d.status === 'published').length}</b><span>researcher contributions</span></div>
-        {user ? <Link className="ws-btn" href="/dashboard/library">Open in my dashboard</Link> : <><Link className="ws-btn" href="/dashboard/register">Register as researcher ({data.settings.libraryFee} ETB)</Link><Link className="ws-btn ghost" href="/dashboard/login">Sign in</Link></>}
-      </div>
-      <LibraryExplorer fullAccess={hasLibraryAccess()} publicMode />
-    </> : <p>Loading library…</p>}
+    <Intro eyebrow="DIGITAL LIBRARY" title={t('Digital Library', 'ዲጂታል ቤተ መጻሕፍት')}>Welcome back, {user.name}. Browse laws, research, manuals, reports and training videos by folder.</Intro>
+    {!hasLibraryAccess() && <div className="ws-banner warn"><Lock /><div><b>Limited access</b><p>Researcher-only documents unlock after your Telebirr payment is approved.</p></div><Link className="ws-btn sm" href="/dashboard/library/access">Get full access</Link></div>}
+    <LibraryExplorer fullAccess={hasLibraryAccess()} />
   </>;
+}
+
+const CAT_ICONS: Record<string, React.ReactNode> = { 'c-laws': <Scale />, 'c-research': <BookOpen />, 'c-manuals': <ScrollText />, 'c-videos': <Film />, 'c-reports': <BarChart3 />, 'c-forms': <FileText /> };
+
+export function LibraryLanding({ t, compact }: { t: T; compact?: string }) {
+  const { ready, data } = useWS();
+  const fee = ready ? data.settings.libraryFee : 200;
+  const pub = ready ? data.docs.filter(d => d.status === 'published') : [];
+  const roots = ready ? data.categories.filter(c => !c.parentId) : [];
+  const n = (id: string) => pub.filter(d => d.categoryId === id || data.categories.find(c => c.id === d.categoryId)?.parentId === id).length;
+  return <div className="dl-landing">
+    <section className="dl-hero">
+      <div className="dl-hero-text">
+        <div className="eyebrow">{compact ? 'AVAILABLE IN THE DIGITAL LIBRARY' : 'DIGITAL LIBRARY · ዲጂታል ቤተ መጻሕፍት'}</div>
+        <h1>{compact || t('Justice knowledge for South Omo, in one place', 'የፍትሕ እውቀት በአንድ ቦታ')}</h1>
+        <p>The South Omo Zone Justice Department Digital Library brings together laws and proclamations, research on customary and criminal justice, practice manuals, annual reports and training videos. Sign in to browse the collection.</p>
+        <div className="dl-cta"><Link className="ws-btn lg" href="/dashboard/login?next=/library"><LogIn size={18} />Sign in</Link><Link className="ws-btn lg ghost-light" href="/dashboard/register"><UserPlus size={18} />Create researcher account</Link></div>
+        <small className="dl-hero-note"><Lock size={13} />Documents are visible only to signed-in users.</small>
+      </div>
+      <div className="dl-hero-stats">
+        <div><b>{pub.length || '—'}</b><span>documents</span></div>
+        <div><b>{roots.length || '—'}</b><span>collections</span></div>
+        <div><b>3</b><span>formats: PDF, Word, video</span></div>
+        <div><b>{fee} ETB</b><span>researcher access fee</span></div>
+      </div>
+    </section>
+
+    <section className="dl-section">
+      <h2>What’s in the collection</h2>
+      <div className="dl-cats">{(roots.length ? roots : []).map(c => <article key={c.id}><span className="dl-cat-ic">{CAT_ICONS[c.id] || <Folder />}</span><div><h3>{c.name}</h3><p>{c.description}</p></div><em>{n(c.id)} item{n(c.id) === 1 ? '' : 's'}</em></article>)}</div>
+    </section>
+
+    <section className="dl-section dl-two">
+      <div>
+        <h2>Become a researcher</h2>
+        <p>Students, academics and practitioners can register for full access and publish their own research in the library.</p>
+        <ol className="dl-steps">
+          <li><span>1</span><div><b>Create an account</b><p>Tell us your institution and research purpose.</p></div></li>
+          <li><span>2</span><div><b>Pay {fee} ETB with Telebirr</b><p>Pay to the department’s merchant code from your phone.</p></div></li>
+          <li><span>3</span><div><b>Upload your receipt</b><p>A screenshot or PDF of the payment receipt.</p></div></li>
+          <li><span>4</span><div><b>Get approved & contribute</b><p>After the Library Admin verifies it, read every document and submit your research for publication.</p></div></li>
+        </ol>
+        <Link className="ws-btn" href="/dashboard/register"><UserPlus size={16} />Register now</Link>
+      </div>
+      <div className="dl-access">
+        <h3>Who can access what</h3>
+        <table><thead><tr><th></th><th>Visitors</th><th>Signed-in</th><th>Approved researchers</th></tr></thead><tbody>
+          <tr><td>About the library</td><td>✓</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Browse documents</td><td>—</td><td>Public items</td><td>All items</td></tr>
+          <tr><td>Download & stream videos</td><td>—</td><td>Public items</td><td>✓</td></tr>
+          <tr><td>Contribute research</td><td>—</td><td>—</td><td>✓</td></tr>
+        </tbody></table>
+        <div className="dl-help"><ShieldCheck size={18} /><p>Staff (prosecutors, directors, library and content staff) sign in with the account provided by the Super Admin.</p></div>
+      </div>
+    </section>
+  </div>;
 }

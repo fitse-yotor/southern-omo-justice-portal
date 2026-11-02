@@ -10,7 +10,8 @@ import { toast } from 'sonner';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
 import { useWS } from '@/lib/ws/store';
 import type { Permission } from '@/lib/ws/types';
-import { Avatar, F } from './ui';
+import { Avatar } from './ui';
+import { Login, Register } from './auth';
 import { Dashboard } from './dashboards';
 import { LibraryBrowse, LibraryManage, LibraryApprovals, LibraryAccess, LibraryContribute } from './library';
 import { CaseList, CaseNew, CaseDetail, SlaSettings } from './cases';
@@ -130,82 +131,3 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 function Denied({ notFound }: { notFound?: boolean }) {
   return <div className="ws-empty big"><ShieldCheck size={40} /><h3>{notFound ? 'Page not found' : 'You do not have access to this page'}</h3><p>{notFound ? 'Check the address or use the menu.' : 'Your role does not include the permission required. Contact the Super Admin if you need access.'}</p><Link className="ws-btn" href="/dashboard">Back to my dashboard</Link></div>;
 }
-
-const DEMO = [
-  ['Super Admin', 'superadmin@southomo.gov.et', 'Admin@123'], ['Director', 'director@southomo.gov.et', 'Demo@123'], ['Prosecutor', 'prosecutor@southomo.gov.et', 'Demo@123'],
-  ['Library Admin', 'library@southomo.gov.et', 'Demo@123'], ['Researcher (approved)', 'researcher@example.com', 'Demo@123'], ['Researcher (pending)', 'lidya.haile@example.com', 'Demo@123'],
-  ['Content Editor', 'editor@southomo.gov.et', 'Demo@123'],
-];
-
-function AuthFrame({ children, side }: { children: React.ReactNode; side?: React.ReactNode }) {
-  return <main className="ws-auth">
-    <section className="ws-auth-brand">
-      <Link href="/" className="ws-auth-logo"><img src="/justice-logo.png" alt="" width={56} height={56} /><span><b lang="am">የደቡብ ኦሞ ዞን ፍትሕ መምሪያ</b>South Omo Zone Justice Department</span></Link>
-      <div><h2>One portal for justice services, prosecution and research.</h2><p>Staff manage cases and reports. Researchers access the digital library and contribute research.</p></div>
-      {side}
-    </section>
-    <section className="ws-auth-form">{children}</section>
-  </main>;
-}
-
-function Login() {
-  const { actions } = useWS();
-  const router = useRouter();
-  const [email, setEmail] = useState(''), [pw, setPw] = useState(''), [err, setErr] = useState('');
-  const submit = (e?: React.FormEvent, em = email, p = pw) => {
-    e?.preventDefault();
-    const r = actions.login(em, p);
-    if (!r.ok) { setErr(r.error); return; }
-    const next = new URLSearchParams(window.location.search).get('next');
-    router.push(next && next.startsWith('/dashboard') ? next : '/dashboard');
-  };
-  return <AuthFrame side={<div className="ws-demo-accounts"><b>Demo accounts</b><p>Tap an account to sign in instantly.</p>{DEMO.map(([r, e, p]) => <button key={e} onClick={() => { setEmail(e); setPw(p); submit(undefined, e, p); }}><span>{r}</span><small>{e}</small></button>)}</div>}>
-    <form onSubmit={submit} className="ws-auth-card">
-      <div className="ws-eyebrow">SECURE SIGN IN</div>
-      <h1>Sign in</h1>
-      <p>Staff, prosecutors, directors and registered researchers.</p>
-      <F label="Email"><input className="ws-input" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></F>
-      <F label="Password"><input className="ws-input" type="password" autoComplete="current-password" required value={pw} onChange={e => setPw(e.target.value)} /></F>
-      {err && <p className="ws-error" role="alert">{err}</p>}
-      <button className="ws-btn block">Sign in</button>
-      <div className="ws-auth-alt">Researcher? <Link href="/dashboard/register">Create an account</Link> · <Link href="/">Back to website</Link></div>
-    </form>
-  </AuthFrame>;
-}
-
-function Register() {
-  const { actions, data } = useWS();
-  const router = useRouter();
-  const [f, setF] = useState({ name: '', email: '', phone: '', institution: '', purpose: '', password: '', confirm: '' });
-  const [err, setErr] = useState('');
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
-  return <AuthFrame side={<ol className="ws-steps-side"><li><b>Create your account</b>Tell us about your institution and research purpose.</li><li><b>Pay {data.settings.libraryFee} ETB with Telebirr</b>Use merchant code {data.settings.telebirrCode}.</li><li><b>Upload the receipt</b>The Library Admin verifies your payment.</li><li><b>Access & contribute</b>Read the full library and submit your research for publication.</li></ol>}>
-    <form className="ws-auth-card" onSubmit={e => {
-      e.preventDefault();
-      if (f.password.length < 8) return setErr('Password must be at least 8 characters.');
-      if (f.password !== f.confirm) return setErr('Passwords do not match.');
-      const r = actions.register({ name: f.name, email: f.email, phone: f.phone, institution: f.institution, purpose: f.purpose, password: f.password });
-      if (!r.ok) return setErr(r.error);
-      toast.success('Account created. Next: pay the library fee and upload your receipt.');
-      router.push('/dashboard/library/access');
-    }}>
-      <div className="ws-eyebrow">DIGITAL LIBRARY</div>
-      <h1>Researcher registration</h1>
-      <p>Access fee: <b>{data.settings.libraryFee} ETB</b> via Telebirr, valid {Math.round(data.settings.accessDays / 30)} months.</p>
-      <div className="ws-grid2">
-        <F label="Full name"><input className="ws-input" required value={f.name} onChange={set('name')} /></F>
-        <F label="Phone (Telebirr)"><input className="ws-input" required inputMode="tel" placeholder="+251 9…" value={f.phone} onChange={set('phone')} /></F>
-        <F label="Email" wide><input className="ws-input" type="email" required value={f.email} onChange={set('email')} /></F>
-        <F label="Institution / organization" wide><input className="ws-input" required value={f.institution} onChange={set('institution')} /></F>
-        <F label="Research purpose" wide><textarea className="ws-input" rows={2} required value={f.purpose} onChange={set('purpose')} /></F>
-        <F label="Password"><input className="ws-input" type="password" required value={f.password} onChange={set('password')} /></F>
-        <F label="Confirm password"><input className="ws-input" type="password" required value={f.confirm} onChange={set('confirm')} /></F>
-      </div>
-      {err && <p className="ws-error" role="alert">{err}</p>}
-      <button className="ws-btn block">Create account</button>
-      <div className="ws-auth-alt">Already registered? <Link href="/dashboard/login">Sign in</Link></div>
-    </form>
-  </AuthFrame>;
-}
-
-
