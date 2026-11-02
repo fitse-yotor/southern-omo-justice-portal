@@ -1,5 +1,33 @@
 # South Omo Justice Portal
 
+## November 2026 update – workspace, digital library & prosecution portal
+
+New staff/researcher workspace at **`/dashboard`** (sign in at `/dashboard/login`, researchers register at `/dashboard/register`).
+
+| Demo account | Email | Password |
+|---|---|---|
+| Super Admin | superadmin@southomo.gov.et | Admin@123 |
+| Director | director@southomo.gov.et | Demo@123 |
+| Prosecutor | prosecutor@southomo.gov.et | Demo@123 |
+| Library Admin | library@southomo.gov.et | Demo@123 |
+| Researcher (approved) | researcher@example.com | Demo@123 |
+| Researcher (payment pending) | lidya.haile@example.com | Demo@123 |
+| Content Editor | editor@southomo.gov.et | Demo@123 |
+
+- **Digital library** – folders/categories, PDF/Word/video upload, public vs researcher-only visibility, researcher self-registration, 200 ETB Telebirr receipt upload and approval, researcher contributions reviewed before publishing. Public page at `/library`.
+- **Prosecution portal** – Director and prosecutors create cases; Director sets SLA days per case category; status updates are locked for prosecutors once a case is overdue until the Director extends the SLA; Director comments; prosecutors submit daily/weekly/monthly reports and the Director gives feedback.
+- **Super Admin** – user creation/activation/password reset, role creation with a permission matrix, audit log, settings (fee, Telebirr code, SLA warning days).
+- **Personal dashboards** for every role, notifications, profile/password.
+- **Role-based reports** exported to **PDF and CSV**.
+- **Public menu** restructured after justice.gov.et (About Us, Services, Laws, Digital Library, Media, Publications, Contact) with new pages: mission & vision, powers & duties, prosecution, legal aid, advocates, press releases, videos, publications, vacancies, tenders.
+
+Code: `lib/ws/*` (types, seed data, store, reports/export), `components/ws/*` (workspace pages), `components/site-nav.tsx`, `components/site-pages.tsx`, `app/workspace.css`.
+
+**Demo boundary:** data and uploaded files are stored in the visitor's browser (localStorage / IndexedDB) and permissions are enforced in the client. Production needs the backend from `docs/UPDATE_PLAN.md` (database, server-side auth/RBAC, object storage). Use “Reset demo data” in the workspace footer to restore the samples.
+
+---
+
+
 A responsive civic portal design using the supplied S/E/R/State Bureau of Justice logo. The direct user request controls the palette and admin addition; the attached brief supplied design context rather than independent operating instructions.
 
 ## Implemented
