@@ -7,9 +7,11 @@ import { toast } from 'sonner';
 import { useWS } from '@/lib/ws/store';
 
 const DEMO = [
-  ['Super Admin', 'superadmin@southomo.gov.et', 'Admin@123'], ['Director', 'director@southomo.gov.et', 'Demo@123'], ['Prosecutor', 'prosecutor@southomo.gov.et', 'Demo@123'],
-  ['Library Admin', 'library@southomo.gov.et', 'Demo@123'], ['Researcher', 'researcher@example.com', 'Demo@123'], ['Researcher (pending)', 'lidya.haile@example.com', 'Demo@123'],
-  ['Content Editor', 'editor@southomo.gov.et', 'Demo@123'],
+  ['Super Admin', 'superadmin@southomo.gov.et', 'Admin@123'], ['Office Head', 'director@southomo.gov.et', 'Demo@123'], ['Prosecutor', 'prosecutor@southomo.gov.et', 'Demo@123'],
+  ['Library Head', 'library@southomo.gov.et', 'Demo@123'], ['Researcher', 'researcher@example.com', 'Demo@123'], ['Researcher (pending)', 'lidya.haile@example.com', 'Demo@123'],
+  ['Content Editor', 'editor@southomo.gov.et', 'Demo@123'], ['Complaint Officer', 'complaints@southomo.gov.et', 'Demo@123'],
+  ['Woreda Office Head', 'woreda.head@southomo.gov.et', 'Demo@123'], ['Records Clerk', 'records@southomo.gov.et', 'Demo@123'], ['Legal Aid Officer', 'legalaid@southomo.gov.et', 'Demo@123'],
+  ['Finance Officer', 'finance@southomo.gov.et', 'Demo@123'], ['Auditor', 'auditor@southomo.gov.et', 'Demo@123'],
 ];
 
 function AuthLayout({ mode, children, aside }: { mode: 'login' | 'register'; children: React.ReactNode; aside: React.ReactNode }) {

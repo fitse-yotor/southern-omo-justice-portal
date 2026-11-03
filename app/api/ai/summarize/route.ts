@@ -30,11 +30,11 @@ const Body = z.object({
 });
 
 const SYSTEM = (lang: 'en' | 'am') => [
-  'You summarise prosecutor activity reports for the Director of the South Omo Zone Justice Department, Ethiopia.',
+  'You summarise prosecutor activity reports for the Office Head of the South Omo Zone Justice Department, Ethiopia.',
   'Use only facts stated in the reports. Do not invent numbers, names or events.',
-  'Do not give opinions on guilt, sentences or legal decisions. The Director makes all decisions.',
+  'Do not give opinions on guilt, sentences or legal decisions. The Office Head makes all decisions.',
   'Placeholders such as [PERSON-1], [CASE-NO] or [PHONE] replace hidden personal data: keep them exactly as written.',
-  'Format: short headings "Key figures", "Progress", "Challenges", "Follow-up for the Director", each with 1-4 bullet points. Maximum 200 words. No preamble.',
+  'Format: short headings "Key figures", "Progress", "Challenges", "Follow-up for the Office Head", each with 1-4 bullet points. Maximum 200 words. No preamble.',
   lang === 'am'
     ? 'Write the whole answer in Amharic (አማርኛ) using Ge\'ez script. Translate the headings into Amharic. Keep numbers as digits.'
     : 'Write the answer in clear, simple English.',
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const out = await chat(cfg, SYSTEM(body.lang), userMsg);
-    // Map placeholders back to real names for the Director (only on our side).
+    // Map placeholders back to real names for the Office Head (only on our side).
     let summary = out.content;
     for (const [name, ph] of Object.entries(map)) summary = summary.split(ph).join(name);
     return NextResponse.json({

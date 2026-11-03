@@ -6,18 +6,18 @@ import { CASE_STATUSES } from '@/lib/ws/types';
 import { Bars, DocIcon, Empty, PageHead, Panel, Pill, SlaPill, Stat, ago, fmtDate } from './ui';
 
 export function Dashboard() {
-  const { user, role, can, data, hasLibraryAccess, userName } = useWS();
+  const { user, role, can, data, hasLibraryAccess, userName, myCases: visible } = useWS();
   if (!user) return null;
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const isResearcher = can('library.contribute');
-  const director = can('cases.viewAll');
+  const director = can('cases.viewAll') || can('cases.viewOffice');
   const prosecutor = can('cases.viewOwn') && !director;
   const libAdmin = can('library.approve');
   const superAdmin = can('users.manage');
 
-  const myCases = data.cases.filter(c => c.prosecutorId === user.id);
-  const scope = director ? data.cases : myCases;
+  const scope = visible;
+  const myCases = scope;
   const open = scope.filter(c => c.status !== 'Closed');
   const overdue = open.filter(c => isOverdue(c));
   const dueSoon = open.filter(c => slaState(c, data.settings.dueSoonDays) === 'due-soon');
@@ -55,7 +55,15 @@ export function Dashboard() {
         <Stat label="Library documents" value={data.docs.filter(d => d.status === 'published').length} icon={<BookOpen />} href="/dashboard/library" />
         <Stat label="My contributions" value={data.docs.filter(d => d.uploadedBy === user.id).length} tone="gold" icon={<FileCheck2 />} href="/dashboard/library/contribute" hint={`${data.docs.filter(d => d.uploadedBy === user.id && d.status === 'published').length} published`} />
       </>}
-      {can('cms.access') && !superAdmin && <Stat label="Website & complaints" value={<Globe />} href="/admin" hint="Open the CMS workspace" />}
+      {can('appointments.manage') && !superAdmin && <>
+        <Stat label="Appointments to confirm" value={data.appointments.filter(a => a.status === 'booked').length} tone="gold" icon={<CalendarDays />} href="/dashboard/appointments" />
+        <Stat label="Upcoming legal aid sessions" value={data.appointments.filter(a => ['booked', 'confirmed'].includes(a.status) && a.date >= new Date().toISOString().slice(0, 10)).length} href="/dashboard/appointments" />
+      </>}
+      {can('reports.finance') && !superAdmin && !director && <>
+        <Stat label="Library fees collected" value={data.payments.filter(p => p.status === 'approved').reduce((t, p) => t + p.amount, 0) + ' ETB'} tone="ink" href="/dashboard/reports" />
+        <Stat label="Receipts awaiting check" value={data.payments.filter(p => p.status === 'pending').length} tone="gold" href="/dashboard/reports" />
+      </>}
+            {can('cms.access') && !superAdmin && <Stat label="Website & complaints" value={<Globe />} href="/admin" hint="Open the CMS workspace" />}
     </div>
 
     {isResearcher && <ResearcherAccess />}
@@ -63,11 +71,11 @@ export function Dashboard() {
 
     <div className="ws-dash-grid">
       {(director || superAdmin) && <Panel title="Cases by status" actions={<Link className="ws-link" href="/dashboard/reports">Reports <ArrowRight size={14} /></Link>}>
-        <Bars data={CASE_STATUSES.map(s => ({ label: s, value: data.cases.filter(c => c.status === s).length, tone: s === 'Closed' ? 'grey' : s === 'Adjourned' ? 'gold' : undefined }))} />
+        <Bars data={CASE_STATUSES.map(s => ({ label: s, value: scope.filter(c => c.status === s).length, tone: s === 'Closed' ? 'grey' : s === 'Adjourned' ? 'gold' : undefined }))} />
       </Panel>}
       {(director || superAdmin) && <Panel title="SLA compliance by category" actions={can('sla.manage') ? <Link className="ws-link" href="/dashboard/sla">Set SLAs <ArrowRight size={14} /></Link> : undefined}>
         <div className="ws-compliance">{data.caseCategories.map(cc => {
-          const cs = data.cases.filter(c => c.categoryId === cc.id); const od = cs.filter(c => isOverdue(c)).length; const pct = cs.length ? Math.round(((cs.length - od) / cs.length) * 100) : 100;
+          const cs = scope.filter(c => c.categoryId === cc.id); const od = cs.filter(c => isOverdue(c)).length; const pct = cs.length ? Math.round(((cs.length - od) / cs.length) * 100) : 100;
           return <div key={cc.id}><span>{cc.name}<small>{cc.slaDays} days SLA · {cs.length} cases</small></span><div className="ws-meter"><i style={{ width: pct + '%' }} className={pct < 70 ? 'bad' : pct < 90 ? 'warn' : ''} /></div><b>{pct}%</b></div>;
         })}</div>
       </Panel>}
@@ -82,7 +90,7 @@ export function Dashboard() {
 
       {director && <Panel title="Prosecutor report compliance" actions={<Link className="ws-link" href="/dashboard/periodic-reports">Review <ArrowRight size={14} /></Link>}>
         <div className="ws-table-wrap"><table className="ws-table compact"><thead><tr><th>Prosecutor</th><th>Daily (today)</th><th>Weekly</th><th>Monthly</th><th>Awaiting</th></tr></thead><tbody>
-          {data.users.filter(u => u.roleId === 'prosecutor' && u.status === 'active').map(u => {
+          {data.users.filter(u => u.roleId === 'prosecutor' && u.status === 'active' && (can('cases.viewAll') || u.office === user.office)).map(u => {
             const rs = data.preports.filter(r => r.prosecutorId === u.id);
             const daily = rs.some(r => r.period === 'Daily' && Date.now() - new Date(r.submittedAt).getTime() < 1.5 * 86400000);
             const weekly = rs.some(r => r.period === 'Weekly' && Date.now() - new Date(r.submittedAt).getTime() < 7 * 86400000);
@@ -158,7 +166,7 @@ function ResearcherAccess() {
 function HearingReminder() {
   const { data, user, can } = useWS();
   const today = new Date().toISOString().slice(0, 10), tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  const mine = can('cases.viewAll') ? data.cases : data.cases.filter(c => c.prosecutorId === user!.id);
+  const { myCases: mine } = useWS(); void user; void can;
   const soon = data.hearings.filter(h => (h.date === today || h.date === tomorrow) && mine.some(c => c.id === h.caseId)).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   if (!soon.length) return null;
   return <div className="ws-banner"><CalendarDays /><div><b>{soon.length} hearing{soon.length > 1 ? 's' : ''} today or tomorrow</b><p>{soon.slice(0, 3).map(h => `${h.date === today ? 'Today' : 'Tomorrow'} ${h.time} · ${data.cases.find(c => c.id === h.caseId)?.title} · ${h.court}`).join('  |  ')}</p></div><Link className="ws-btn sm" href="/dashboard/calendar">Open calendar</Link></div>;

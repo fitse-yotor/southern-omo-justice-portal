@@ -3,12 +3,12 @@ import { useMemo, useState } from 'react';
 import { FileDown, FileSpreadsheet, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWS } from '@/lib/ws/store';
-import { REPORTS, exportCSV, exportPDF } from '@/lib/ws/reports';
+import { exportCSV, exportPDF, reportsFor } from '@/lib/ws/reports';
 import { Empty, F, PageHead, Panel } from './ui';
 
 export function ReportsPage() {
   const { data, user, role, can } = useWS();
-  const available = REPORTS.filter(r => can(r.perm));
+  const available = reportsFor(can);
   const [sel, setSel] = useState(available[0]?.id), [from, setFrom] = useState(''), [to, setTo] = useState(''), [busy, setBusy] = useState(false);
   const def = available.find(r => r.id === sel) || available[0];
   const table = useMemo(() => (def ? def.build(data, user!, from || undefined, to || undefined) : null), [def, data, user, from, to]);
@@ -16,7 +16,7 @@ export function ReportsPage() {
   if (!def || !table) return <Empty title="No reports available for your role" />;
   const file = `${def.id}-${new Date().toISOString().slice(0, 10)}`;
   return <>
-    <PageHead eyebrow="REPORTS & EXPORT" title="Reports">Reports shown here depend on your role ({role?.name}). Export any report to PDF or CSV.</PageHead>
+    <PageHead eyebrow="REPORTS & EXPORT" title="Reports">{available.length} reports are available to your role ({role?.name}). Export any report to PDF or CSV.</PageHead>
     <div className="ws-reports">
       <aside className="ws-report-list">{scopes.map(s => <div key={s}><div className="sidebar-caption dark">{s}</div>{available.filter(r => r.scope === s).map(r => <button key={r.id} aria-pressed={r.id === def.id} onClick={() => setSel(r.id)}><FileText size={16} /><span><b>{r.title}</b><small>{r.description}</small></span></button>)}</div>)}</aside>
       <Panel className="ws-report-view" title={def.title} actions={<div className="ws-export">

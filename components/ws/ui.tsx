@@ -39,7 +39,7 @@ export function SlaPill({ c }: { c: Case }) {
   const { data } = useWS();
   const s = slaState(c, data.settings.dueSoonDays), d = daysLeft(c);
   if (s === 'closed') return <Pill tone="grey"><CheckCircle2 size={13} />Closed</Pill>;
-  if (s === 'overdue') return <Pill tone="red"><AlertTriangle size={13} />Overdue {Math.abs(d)}d</Pill>;
+  if (s === 'overdue') return <Pill tone="red"><AlertTriangle size={13} />Overdue {Math.abs(d)}d{c.permitUntil && new Date(c.permitUntil).getTime() > Date.now() ? ' · permitted' : ''}</Pill>;
   if (s === 'due-soon') return <Pill tone="gold"><Clock size={13} />Due in {d}d</Pill>;
   return <Pill tone="green"><Clock size={13} />{d}d left</Pill>;
 }

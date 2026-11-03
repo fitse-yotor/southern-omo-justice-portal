@@ -123,7 +123,7 @@ export function SettingsPage() {
           <F label="Organization name" wide><input className="ws-input" value={s.orgName} onChange={e => setS({ ...s, orgName: e.target.value })} /></F>
           <F label="“Due soon” warning (days before SLA)"><input className="ws-input" type="number" min={1} value={s.dueSoonDays} onChange={e => setS({ ...s, dueSoonDays: +e.target.value })} /></F>
         </div>
-        <p className="ws-sub">SLA days per case category are set by the Director under <Link href="/dashboard/sla">SLA by category</Link>.</p>
+        <p className="ws-sub">SLA days per case category are set by the Office Head under <Link href="/dashboard/sla">SLA by category</Link>.</p>
         <button className="ws-btn"><Save size={16} />Save settings</button>
       </Panel>
     </form>

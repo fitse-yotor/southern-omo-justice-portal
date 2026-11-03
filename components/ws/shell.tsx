@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Activity, Bell, BookOpen, BookUp, Briefcase, CalendarCheck, CalendarDays, ChartColumn, CheckSquare, ClipboardList, FilePlus2, FolderCog, Globe, KeyRound, LayoutDashboard,
+  Activity, Bell, Gauge, BookOpen, BookUp, Briefcase, CalendarCheck, CalendarDays, ChartColumn, CheckSquare, ClipboardList, FilePlus2, FolderCog, Globe, KeyRound, LayoutDashboard,
   ListTodo, LogOut, Map as MapIcon, Newspaper, Scale, ScrollText, Settings2, ShieldCheck, Shuffle, Star, Timer, TrendingUp, UserCircle2, Users, Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,6 +22,8 @@ import { CaseMapPage, DigestPage, HearingCalendarPage, PerformancePage, TasksPag
 import { DocDetailPage, ResearcherProfile } from './library-extra';
 import { AppointmentsPage, EventsAdminPage, GlobalSearch, OfflineBanner, SystemHealthPage } from './system';
 import { translate } from '@/lib/ws/i18n';
+import { KpiPage } from './kpi-page';
+import { reportsFor } from '@/lib/ws/reports';
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; show: boolean; badge?: number };
 
@@ -51,7 +53,7 @@ export default function Workspace() {
   const isResearcher = can('library.contribute');
   const pendingApprovals = data.payments.filter(p => p.status === 'pending').length + data.docs.filter(d => d.status === 'pending').length;
   const unread = data.notifications.filter(n => n.userId === user.id && !n.read).length;
-  const anyReport = (['reports.system', 'reports.library', 'reports.cases', 'reports.own'] as Permission[]).some(can);
+  const anyReport = reportsFor(can).length > 0;
   const pendingReview = data.preports.filter(r => r.status === 'Submitted').length;
   const autoTasks = autoTaskList.filter(t => t.tone === 'red').length;
 
@@ -59,7 +61,7 @@ export default function Workspace() {
     ['Overview', [
       { href: '/dashboard', label: 'My dashboard', icon: <LayoutDashboard />, show: true },
       { href: '/dashboard/notifications', label: 'Notifications', icon: <Bell />, show: true, badge: unread },
-      { href: '/dashboard/tasks', label: 'My tasks', icon: <ListTodo />, show: can('cases.viewAll') || can('cases.viewOwn') || can('preports.review'), badge: autoTasks },
+      { href: '/dashboard/tasks', label: 'My tasks', icon: <ListTodo />, show: can('cases.viewAll') || can('cases.viewOwn') || can('cases.viewOffice') || can('preports.review'), badge: autoTasks },
     ]],
     ['Digital library', [
       { href: '/dashboard/library', label: 'Browse library', icon: <BookOpen />, show: true },
@@ -69,13 +71,14 @@ export default function Workspace() {
       { href: '/dashboard/library/approvals', label: 'Approvals', icon: <CheckSquare />, show: can('library.approve'), badge: pendingApprovals },
     ]],
     ['Prosecution', [
-      { href: '/dashboard/cases', label: can('cases.viewAll') ? 'All cases' : 'My cases', icon: <Briefcase />, show: can('cases.viewAll') || can('cases.viewOwn') },
+      { href: '/dashboard/cases', label: can('cases.viewAll') ? 'All cases' : can('cases.viewOffice') ? 'Office cases' : 'My cases', icon: <Briefcase />, show: can('cases.viewAll') || can('cases.viewOwn') || can('cases.viewOffice') },
       { href: '/dashboard/cases/new', label: 'New case', icon: <FilePlus2 />, show: can('cases.create') },
-      { href: '/dashboard/calendar', label: 'Hearing calendar', icon: <CalendarDays />, show: can('cases.viewAll') || can('cases.viewOwn') },
-      { href: '/dashboard/sla', label: 'SLA by category', icon: <Timer />, show: can('sla.manage') },
-      { href: '/dashboard/periodic-reports', label: can('preports.review') ? 'Prosecutor reports' : 'My reports', icon: <ClipboardList />, show: can('preports.submit') || can('preports.review'), badge: can('preports.review') ? pendingReview : 0 },
+      { href: '/dashboard/kpi', label: 'KPI & case report', icon: <Gauge />, show: can('cases.viewAll') || can('cases.viewOwn') || can('cases.viewOffice') },
+      { href: '/dashboard/calendar', label: 'Hearing calendar', icon: <CalendarDays />, show: can('cases.viewAll') || can('cases.viewOwn') || can('cases.viewOffice') },
+      { href: '/dashboard/sla', label: 'SLA by case type', icon: <Timer />, show: can('sla.manage') },
+      { href: '/dashboard/periodic-reports', label: can('preports.review') || can('preports.view') ? 'Prosecutor reports' : 'My reports', icon: <ClipboardList />, show: can('preports.submit') || can('preports.review') || can('preports.view'), badge: can('preports.review') ? pendingReview : 0 },
     ]],
-    ['Director', [
+    ['Office Head', [
       { href: '/dashboard/performance', label: 'Performance', icon: <TrendingUp />, show: can('cases.viewAll') },
       { href: '/dashboard/workload', label: 'Workload balancing', icon: <Shuffle />, show: can('cases.viewAll') && can('cases.create') },
       { href: '/dashboard/case-map', label: 'Case map', icon: <MapIcon />, show: can('cases.viewAll') },
@@ -110,11 +113,12 @@ export default function Workspace() {
         : parts[1] === 'access' ? <LibraryAccess /> : parts[1] === 'contribute' ? deny(isResearcher, <LibraryContribute />) : parts[1] === 'doc' && parts[2] ? <DocDetailPage id={parts[2]} /> : <LibraryBrowse />;
       break;
     case 'cases':
-      content = !(can('cases.viewAll') || can('cases.viewOwn')) ? <Denied /> : parts[1] === 'new' ? deny(can('cases.create'), <CaseNew />) : parts[1] ? <CaseDetail id={parts[1]} /> : <CaseList />;
+      content = !(can('cases.viewAll') || can('cases.viewOwn') || can('cases.viewOffice')) ? <Denied /> : parts[1] === 'new' ? deny(can('cases.create'), <CaseNew />) : parts[1] ? <CaseDetail id={parts[1]} /> : <CaseList />;
       break;
     case 'sla': content = deny(can('sla.manage'), <SlaSettings />); break;
-    case 'calendar': content = deny(can('cases.viewAll') || can('cases.viewOwn'), <HearingCalendarPage />); break;
+    case 'calendar': content = deny(can('cases.viewAll') || can('cases.viewOwn') || can('cases.viewOffice'), <HearingCalendarPage />); break;
     case 'tasks': content = <TasksPage />; break;
+    case 'kpi': content = deny(can('cases.viewAll') || can('cases.viewOwn') || can('cases.viewOffice'), <KpiPage />); break;
     case 'performance': content = deny(can('cases.viewAll'), <PerformancePage />); break;
     case 'workload': content = deny(can('cases.viewAll') && can('cases.create'), <WorkloadPage />); break;
     case 'case-map': content = deny(can('cases.viewAll'), <CaseMapPage />); break;
@@ -123,7 +127,7 @@ export default function Workspace() {
     case 'events': content = deny(can('events.manage'), <EventsAdminPage />); break;
     case 'system': content = deny(can('settings.manage'), <SystemHealthPage />); break;
     case 'researchers': content = parts[1] ? <ResearcherProfile id={parts[1]} /> : <Denied notFound />; break;
-    case 'periodic-reports': content = deny(can('preports.submit') || can('preports.review'), parts[1] ? <PeriodicReportDetail id={parts[1]} /> : <PeriodicReports />); break;
+    case 'periodic-reports': content = deny(can('preports.submit') || can('preports.review') || can('preports.view'), parts[1] ? <PeriodicReportDetail id={parts[1]} /> : <PeriodicReports />); break;
     case 'reports': content = deny(anyReport, <ReportsPage />); break;
     case 'users': content = deny(can('users.manage'), <UsersPage />); break;
     case 'roles': content = deny(can('roles.manage'), <RolesPage />); break;

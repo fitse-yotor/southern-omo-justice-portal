@@ -13,6 +13,20 @@ type Result = { ok: true; id?: string } | { ok: false; error: string };
 export function defaultPrefs(): UserPrefs { return { lang: 'en', theme: 'light', textSize: 100, notify: Object.fromEntries(NOTIFY_EVENTS.map(e => [e, { app: true, email: e !== 'Library approvals', sms: e === 'SLA due soon / overdue' || e === 'Hearing reminders' }])) }; }
 
 export function isOverdue(c: Case, at = Date.now()) { return c.status !== 'Closed' && new Date(c.dueAt).getTime() < at; }
+/** Office Head permission currently active on an overdue case. */
+export function hasPermission(c: Case, at = Date.now()) { return !!c.permitUntil && new Date(c.permitUntil).getTime() > at; }
+/** Overdue and no active permission → prosecutor cannot update. */
+export function isLocked(c: Case, at = Date.now()) { return isOverdue(c, at) && !hasPermission(c, at); }
+/** Closed after its SLA due date. */
+export function closedLate(c: Case) { return c.status === 'Closed' && !!c.closedAt && new Date(c.closedAt).getTime() > new Date(c.dueAt).getTime(); }
+/** Counts as overdue for KPIs: open past due (with or without permission) or closed late. */
+export function kpiOverdue(c: Case, at = Date.now()) { return isOverdue(c, at) || closedLate(c); }
+/** Cases a user may see: all, own woreda office, or own. */
+export function visibleCases(d: WSData, u: User | null, can: (p: Permission) => boolean) {
+  if (!u) return [];
+  if (can('cases.viewAll')) return d.cases;
+  return d.cases.filter(c => c.prosecutorId === u.id || (can('cases.viewOffice') && c.office === u.office));
+}
 export function daysLeft(c: Case, at = Date.now()) { return Math.ceil((new Date(c.dueAt).getTime() - at) / DAY); }
 export function slaState(c: Case, dueSoon = 7): 'closed' | 'overdue' | 'due-soon' | 'on-track' {
   if (c.status === 'Closed') return 'closed';
@@ -145,13 +159,13 @@ function useWorkspaceState() {
     },
 
     // Cases
-    createCase(c: Pick<Case, 'title' | 'categoryId' | 'prosecutorId' | 'office' | 'parties' | 'description' | 'priority'> & { openedAt?: string }): Result {
+    createCase(c: Pick<Case, 'title' | 'categoryId' | 'subject' | 'prosecutorId' | 'office' | 'parties' | 'description' | 'priority'> & { openedAt?: string }): Result {
       if (!data) return { ok: false, error: 'Not ready' };
       const cat = data.caseCategories.find(x => x.id === c.categoryId)!;
       const openedAt = c.openedAt ? new Date(c.openedAt).toISOString() : nowIso();
       const id = uid('case');
       const n = data.cases.length + 141;
-      const caseNo = `SOZ/${cat.name.slice(0, 2).toUpperCase()}/${String(n).padStart(4, '0')}/${new Date(openedAt).getFullYear()}`;
+      const caseNo = `SOZ/${({ 'ct-ord': 'OR', 'ct-app': 'AP', 'ct-cas': 'CS' } as Record<string, string>)[cat.id] || cat.name.slice(0, 2).toUpperCase()}/${String(n).padStart(4, '0')}/${new Date(openedAt).getFullYear()}`;
       mutate(d => {
         let x = withAudit({
           ...d,
@@ -166,8 +180,8 @@ function useWorkspaceState() {
     updateCaseStatus(caseId: string, to: CaseStatus, note: string): Result {
       const c = data?.cases.find(x => x.id === caseId);
       if (!c) return { ok: false, error: 'Case not found' };
-      // SLA lock: prosecutors cannot change status once the SLA is overdue. (Server-side check in production.)
-      if (isOverdue(c) && !can('cases.extend')) return { ok: false, error: 'SLA overdue — status updates are locked. Ask the Director to review and extend the SLA.' };
+      // SLA lock: once overdue, only the Office Head can update – unless the Office Head has given permission. (Server-side check in production.)
+      if (isLocked(c) && !can('cases.extend')) return { ok: false, error: 'SLA overdue — status updates are locked. Go to the Office Head to explain the delay and get permission.' };
       if (to === c.status) return { ok: false, error: 'Choose a different status.' };
       mutate(d => {
         let x = withAudit({
@@ -175,7 +189,7 @@ function useWorkspaceState() {
           cases: d.cases.map(z => z.id === caseId ? { ...z, status: to, updatedAt: nowIso(), closedAt: to === 'Closed' ? nowIso() : undefined } : z),
           statusChanges: [...d.statusChanges, { id: uid('sc'), caseId, from: c.status, to, note, by: me, at: nowIso() }],
         }, me, `Changed ${c.caseNo} status: ${c.status} → ${to}`);
-        const watchers = Array.from(new Set([...usersWith(d, 'cases.viewAll'), c.prosecutorId])).filter(u => u !== me);
+        const watchers = Array.from(new Set([...usersWith(d, 'cases.viewAll').filter(u => d.users.find(x => x.id === u)?.roleId !== 'auditor'), c.prosecutorId])).filter(u => u !== me);
         x = notify(x, watchers, `${c.caseNo} status updated to “${to}” by ${user?.name}.`, '/dashboard/cases/' + caseId);
         return x;
       });
@@ -186,12 +200,16 @@ function useWorkspaceState() {
       mutate(d => notify(withAudit({ ...d, comments: [...d.comments, { id: uid('cm'), caseId, by: me, body, at: nowIso() }] }, me, `Commented on ${c.caseNo}`),
         Array.from(new Set([c.prosecutorId, ...usersWith(d, 'cases.viewAll')])).filter(u => u !== me), `${user?.name} commented on ${c.caseNo}.`, '/dashboard/cases/' + caseId));
     },
-    extendSla(caseId: string, days: number, reason: string) {
+    /** Office Head permission on an overdue case: unlocks updates for N days. The SLA due date is NOT changed, so the case stays overdue in KPIs. */
+    grantPermission(caseId: string, days: number, reason: string) {
       const c = data!.cases.find(x => x.id === caseId)!;
-      const base = Math.max(Date.now(), new Date(c.dueAt).getTime());
-      const newDue = new Date(base + days * DAY).toISOString();
-      mutate(d => notify(withAudit({ ...d, cases: d.cases.map(z => z.id === caseId ? { ...z, dueAt: newDue } : z), extensions: [...d.extensions, { id: uid('ex'), caseId, by: me, days, reason, at: nowIso(), oldDue: c.dueAt, newDue }] }, me, `Extended SLA of ${c.caseNo} by ${days} days`),
-        [c.prosecutorId], `SLA for ${c.caseNo} extended by ${days} days. Status updates are unlocked.`, '/dashboard/cases/' + caseId));
+      const until = new Date(Date.now() + days * DAY).toISOString();
+      mutate(d => notify(withAudit({ ...d, cases: d.cases.map(z => z.id === caseId ? { ...z, permitUntil: until } : z), extensions: [...d.extensions, { id: uid('ex'), caseId, by: me, days, reason, at: nowIso(), oldDue: c.dueAt, newDue: until }] }, me, `Gave permission on overdue case ${c.caseNo} for ${days} days`),
+        [c.prosecutorId], `Permission given on ${c.caseNo} for ${days} days. You can update the case and file reports; it still counts as overdue.`, '/dashboard/cases/' + caseId));
+    },
+    revokePermission(caseId: string) {
+      const c = data!.cases.find(x => x.id === caseId)!;
+      mutate(d => withAudit({ ...d, cases: d.cases.map(z => z.id === caseId ? { ...z, permitUntil: undefined } : z) }, me, `Withdrew permission on ${c.caseNo}`));
     },
     reassignCase(caseId: string, prosecutorId: string) {
       mutate(d => notify(withAudit({ ...d, cases: d.cases.map(z => z.id === caseId ? { ...z, prosecutorId } : z) }, me, `Reassigned case to ${d.users.find(u => u.id === prosecutorId)?.name}`), [prosecutorId], 'A case was assigned to you.', '/dashboard/cases/' + caseId));
@@ -281,12 +299,13 @@ function useWorkspaceState() {
     addFeedback(reportId: string, body: string) {
       const r = data!.preports.find(x => x.id === reportId)!;
       mutate(d => notify(withAudit({ ...d, preports: d.preports.map(x => x.id === reportId ? { ...x, status: 'Reviewed' } : x), feedback: [...d.feedback, { id: uid('fb'), reportId, by: me, body, at: nowIso() }] }, me, `Gave feedback on ${r.period.toLowerCase()} report of ${d.users.find(u => u.id === r.prosecutorId)?.name}`),
-        [r.prosecutorId], `Director feedback on your ${r.period.toLowerCase()} report (${r.periodLabel}).`, '/dashboard/periodic-reports/' + reportId));
+        [r.prosecutorId], `Office Head feedback on your ${r.period.toLowerCase()} report (${r.periodLabel}).`, '/dashboard/periodic-reports/' + reportId));
     },
   };
 
   const prefs: UserPrefs = { ...defaultPrefs(), ...(user?.prefs || {}) };
-  return { ready: !!data, data: data!, user, role, can, hasLibraryAccess, actions, prefs, userName: (id?: string) => id === 'system' ? 'System' : data?.users.find(u => u.id === id)?.name || '—' };
+  const myCases = data ? visibleCases(data, user, can) : [];
+  return { ready: !!data, data: data!, user, role, can, hasLibraryAccess, actions, prefs, myCases, userName: (id?: string) => id === 'system' ? 'System' : data?.users.find(u => u.id === id)?.name || '—' };
 }
 
 type WS = ReturnType<typeof useWorkspaceState>;

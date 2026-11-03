@@ -5,7 +5,8 @@ export type Permission =
   | 'preports.submit' | 'preports.review'
   | 'cms.access'
   | 'reports.system' | 'reports.library' | 'reports.cases' | 'reports.own'
-  | 'appointments.manage' | 'events.manage';
+  | 'appointments.manage' | 'events.manage'
+  | 'cases.viewOffice' | 'cases.documents' | 'preports.view' | 'reports.citizen' | 'reports.finance' | 'reports.office';
 
 export type Role = { id: string; name: string; description: string; permissions: Permission[]; system?: boolean };
 
@@ -34,12 +35,17 @@ export type Payment = {
 export type CaseCategory = { id: string; name: string; slaDays: number; updatedAt: string; updatedBy: string };
 export type CaseStatus = 'Registered' | 'Under investigation' | 'Charge filed' | 'In court' | 'Adjourned' | 'Judgment delivered' | 'Closed';
 export type Case = {
-  id: string; caseNo: string; title: string; categoryId: string; prosecutorId: string; createdBy: string; office: string;
+  id: string; caseNo: string; title: string;
+  /** Case type (Ordinary / Appellate / Cassation) – the SLA is set per case type */
+  categoryId: string; subject: string; prosecutorId: string; createdBy: string; office: string;
+  /** Until when the Office Head has allowed updates on an overdue case. The case still counts as overdue in KPIs. */
+  permitUntil?: string;
   parties: string; description: string; priority: 'Normal' | 'High' | 'Urgent'; openedAt: string; dueAt: string;
   status: CaseStatus; closedAt?: string; updatedAt: string;
 };
 export type StatusChange = { id: string; caseId: string; from: CaseStatus | null; to: CaseStatus; note: string; by: string; at: string };
 export type CaseComment = { id: string; caseId: string; by: string; body: string; at: string };
+/** Permission from the Office Head to keep working on an overdue case. The SLA due date does NOT change. newDue = permission end. */
 export type Extension = { id: string; caseId: string; by: string; days: number; reason: string; at: string; oldDue: string; newDue: string };
 
 export type Period = 'Daily' | 'Weekly' | 'Monthly';
@@ -54,7 +60,7 @@ export type Audit = { id: string; by: string; action: string; at: string };
 export type Settings = { libraryFee: number; telebirrCode: string; telebirrName: string; accessDays: number; dueSoonDays: number; orgName: string };
 
 export type NotifyChannel = { app: boolean; email: boolean; sms: boolean };
-export const NOTIFY_EVENTS = ['Case assigned or updated', 'SLA due soon / overdue', 'Director comments & feedback', 'Hearing reminders', 'Library approvals', 'Report reminders'] as const;
+export const NOTIFY_EVENTS = ['Case assigned or updated', 'SLA due soon / overdue', 'Office Head comments & feedback', 'Hearing reminders', 'Library approvals', 'Report reminders'] as const;
 export type UserPrefs = { lang: 'en' | 'am'; theme: 'light' | 'dark'; textSize: 100 | 112 | 125; notify: Record<string, NotifyChannel> };
 
 export type Appointment = { id: string; code: string; name: string; phone: string; office: string; date: string; time: string; issue: string; details: string; status: 'booked' | 'confirmed' | 'completed' | 'cancelled'; createdAt: string; staffNote?: string };
@@ -75,6 +81,7 @@ export type WSData = {
 };
 
 export const CASE_STATUSES: CaseStatus[] = ['Registered', 'Under investigation', 'Charge filed', 'In court', 'Adjourned', 'Judgment delivered', 'Closed'];
+export const CASE_SUBJECTS = ['Homicide', 'Theft & robbery', 'Gender-based violence', 'Fraud & corruption', 'Land & property', 'Traffic offence', 'Juvenile', 'Assault', 'Other'];
 export const OFFICES = ['Zone office (Jinka)', 'Jinka Town', 'South Ari', 'North Ari', 'Bena-Tsemay', 'Hamer', 'Male', 'Dasenech', 'Nyangatom', 'Selamago'];
 
 export const PERMISSIONS: { key: Permission; label: string; group: string }[] = [
@@ -92,14 +99,20 @@ export const PERMISSIONS: { key: Permission; label: string; group: string }[] = 
   { key: 'cases.create', label: 'Create cases', group: 'Prosecution' },
   { key: 'cases.viewAll', label: 'View all cases', group: 'Prosecution' },
   { key: 'cases.viewOwn', label: 'View own cases', group: 'Prosecution' },
+  { key: 'cases.viewOffice', label: 'View cases of own woreda office', group: 'Prosecution' },
+  { key: 'cases.documents', label: 'Upload case documents', group: 'Prosecution' },
+  { key: 'preports.view', label: 'Read prosecutor reports (no feedback)', group: 'Prosecution' },
   { key: 'cases.update', label: 'Update case status', group: 'Prosecution' },
   { key: 'cases.comment', label: 'Comment on cases', group: 'Prosecution' },
-  { key: 'cases.extend', label: 'Extend overdue SLA', group: 'Prosecution' },
-  { key: 'sla.manage', label: 'Set SLA per case category', group: 'Prosecution' },
+  { key: 'cases.extend', label: 'Give permission on overdue cases', group: 'Prosecution' },
+  { key: 'sla.manage', label: 'Set SLA per case type', group: 'Prosecution' },
   { key: 'preports.submit', label: 'Submit daily/weekly/monthly reports', group: 'Prosecution' },
   { key: 'preports.review', label: 'Review reports & give feedback', group: 'Prosecution' },
   { key: 'reports.system', label: 'System & user reports', group: 'Reports & export' },
   { key: 'reports.library', label: 'Library reports', group: 'Reports & export' },
   { key: 'reports.cases', label: 'Case & SLA reports', group: 'Reports & export' },
+  { key: 'reports.office', label: 'Woreda office reports', group: 'Reports & export' },
+  { key: 'reports.citizen', label: 'Citizen service reports (legal aid, ratings, events)', group: 'Reports & export' },
+  { key: 'reports.finance', label: 'Finance reports (library fees)', group: 'Reports & export' },
   { key: 'reports.own', label: 'My own activity reports', group: 'Reports & export' },
 ];

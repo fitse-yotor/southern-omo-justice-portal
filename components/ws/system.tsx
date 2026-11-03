@@ -22,7 +22,7 @@ export function GlobalSearch({ links }: { links: NavLink[] }) {
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, []);
   const go = (href: string) => { setOpen(false); router.push(href); };
-  const cases = can('cases.viewAll') ? data.cases : can('cases.viewOwn') ? data.cases.filter(c => c.prosecutorId === user!.id) : [];
+  const { myCases: cases } = useWS();
   const reports = can('preports.review') ? data.preports : can('preports.submit') ? data.preports.filter(r => r.prosecutorId === user!.id) : [];
   const docs = data.docs.filter(d => d.status === 'published' && (d.visibility === 'public' || hasLibraryAccess()));
   return <>

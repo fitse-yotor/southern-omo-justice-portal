@@ -19,18 +19,20 @@ function defaultLabel(p: Period) {
 
 export function PeriodicReports() {
   const { data, user, can, userName } = useWS();
-  const reviewer = can('preports.review');
+  const reviewer = can('preports.review') || can('preports.view');
+  const officeOf = (id: string) => data.users.find(u => u.id === id)?.office;
+  const canSee = (pid: string) => pid === user!.id || can('preports.review') || (can('preports.view') && (can('cases.viewAll') || officeOf(pid) === user!.office));
   const newParam = useQueryParam('new');
   const [open, setOpen] = useState(false), [period, setPeriod] = useState('all'), [pros, setPros] = useState('all'), [status, setStatus] = useState('all'), [aiOpen, setAiOpen] = useState(false);
   const ai = useAiStatus();
   useEffect(() => { if (newParam && can('preports.submit')) setOpen(true); }, [newParam]); // eslint-disable-line react-hooks/exhaustive-deps
-  const list = data.preports.filter(r => (reviewer || r.prosecutorId === user!.id) && (period === 'all' || r.period === period) && (pros === 'all' || r.prosecutorId === pros) && (status === 'all' || r.status === status))
+  const list = data.preports.filter(r => canSee(r.prosecutorId) && (period === 'all' || r.period === period) && (pros === 'all' || r.prosecutorId === pros) && (status === 'all' || r.status === status))
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   return <>
     <PageHead eyebrow="PROSECUTION" title={reviewer ? 'Prosecutor reports' : 'My reports'} actions={can('preports.submit') ? <button className="ws-btn" onClick={() => setOpen(true)}><Plus size={16} />Submit report</button> : reviewer && ai?.enabled ? <button className="ws-btn" onClick={() => setAiOpen(true)} disabled={!list.length}><Sparkles size={16} />AI summary of this list</button> : undefined}>
-      {reviewer ? 'Daily, weekly and monthly reports submitted by prosecutors. Open a report to give feedback.' : 'Submit your daily, weekly and monthly reports. The Director reviews each report and gives feedback.'}
+      {reviewer ? 'Daily, weekly and monthly reports submitted by prosecutors. Open a report to give feedback.' : 'Submit your daily, weekly and monthly reports. The Office Head reviews each report and gives feedback.'}
     </PageHead>
-    <div className="ws-chips">{['all', ...PERIODS].map(p => <button key={p} aria-pressed={period === p} onClick={() => setPeriod(p)}>{p === 'all' ? 'All periods' : p}<em>{data.preports.filter(r => (reviewer || r.prosecutorId === user!.id) && (p === 'all' || r.period === p)).length}</em></button>)}</div>
+    <div className="ws-chips">{['all', ...PERIODS].map(p => <button key={p} aria-pressed={period === p} onClick={() => setPeriod(p)}>{p === 'all' ? 'All periods' : p}<em>{data.preports.filter(r => canSee(r.prosecutorId) && (p === 'all' || r.period === p)).length}</em></button>)}</div>
     <Panel>
       {reviewer && <div className="ws-filters">
         <Sel aria-label="Prosecutor" value={pros} onChange={setPros} options={[['all', 'All prosecutors'], ...data.users.filter(u => u.roleId === 'prosecutor').map(u => [u.id, u.name] as [string, string])]} />
@@ -83,7 +85,7 @@ function SubmitReport({ open, onClose, initial }: { open: boolean; onClose: () =
     setFilled(true);
   };
   useEffect(() => { if (open) prefill(initial); }, [open, initial]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <Modal open={open} onClose={onClose} title="Submit report" description="Your report is sent to the Director for review." wide>
+  return <Modal open={open} onClose={onClose} title="Submit report" description="Your report is sent to the Office Head for review." wide>
     <form className="ws-form" onSubmit={e => {
       e.preventDefault();
       actions.submitReport({ period: f.period, periodLabel: f.periodLabel, periodStart: new Date().toISOString(), newCases: +f.newCases, closedCases: +f.closedCases, hearings: +f.hearings, summary: f.summary, challenges: f.challenges, nextPlan: f.nextPlan });
@@ -100,7 +102,7 @@ function SubmitReport({ open, onClose, initial }: { open: boolean; onClose: () =
       <F label="Activities & progress"><textarea className="ws-input" rows={3} required value={f.summary} onChange={e => setF({ ...f, summary: e.target.value })} /></F>
       <F label="Challenges"><textarea className="ws-input" rows={2} value={f.challenges} onChange={e => setF({ ...f, challenges: e.target.value })} /></F>
       <F label="Plan for next period"><textarea className="ws-input" rows={2} value={f.nextPlan} onChange={e => setF({ ...f, nextPlan: e.target.value })} /></F>
-      <div className="ws-form-actions"><button type="button" className="ws-btn ghost" onClick={onClose}>Cancel</button><button className="ws-btn"><Send size={16} />Submit to Director</button></div>
+      <div className="ws-form-actions"><button type="button" className="ws-btn ghost" onClick={onClose}>Cancel</button><button className="ws-btn"><Send size={16} />Submit to Office Head</button></div>
     </form>
   </Modal>;
 }
@@ -109,7 +111,8 @@ export function PeriodicReportDetail({ id }: { id: string }) {
   const { data, user, can, actions, userName } = useWS();
   const r = data.preports.find(x => x.id === id);
   const [fb, setFb] = useState('');
-  if (!r || (!can('preports.review') && r.prosecutorId !== user!.id)) return <Empty title="Report not found" />;
+  const officeOk = r && (can('cases.viewAll') || data.users.find(u => u.id === r.prosecutorId)?.office === user!.office);
+  if (!r || (!can('preports.review') && !(can('preports.view') && officeOk) && r.prosecutorId !== user!.id)) return <Empty title="Report not found" />;
   const feedback = data.feedback.filter(f => f.reportId === id).sort((a, b) => a.at.localeCompare(b.at));
   const p = data.users.find(u => u.id === r.prosecutorId);
   return <>
@@ -126,8 +129,8 @@ export function PeriodicReportDetail({ id }: { id: string }) {
       </div>
       <aside className="ws-detail-side">
         {can('preports.review') && <AiSummaryPanel reports={[r]} mode="report" onUse={t => setFb(t)} compact />}
-        <Panel title="Director feedback">
-          {feedback.length ? <ul className="ws-comments">{feedback.map(f => <li key={f.id}><Avatar name={userName(f.by)} size={30} /><div><b>{userName(f.by)}</b><small>{fmtDate(f.at)}</small><p>{f.body}</p></div></li>)}</ul> : <Empty title="No feedback yet">{can('preports.review') ? 'Add your feedback below.' : 'The Director has not reviewed this report yet.'}</Empty>}
+        <Panel title="Office Head feedback">
+          {feedback.length ? <ul className="ws-comments">{feedback.map(f => <li key={f.id}><Avatar name={userName(f.by)} size={30} /><div><b>{userName(f.by)}</b><small>{fmtDate(f.at)}</small><p>{f.body}</p></div></li>)}</ul> : <Empty title="No feedback yet">{can('preports.review') ? 'Add your feedback below.' : 'The Office Head has not reviewed this report yet.'}</Empty>}
           {can('preports.review') && <form className="ws-form" onSubmit={e => { e.preventDefault(); if (!fb.trim()) return; actions.addFeedback(id, fb.trim()); setFb(''); toast.success('Feedback sent to ' + p?.name); }}>
             <F label="Add feedback"><textarea className="ws-input" rows={4} value={fb} onChange={e => setFb(e.target.value)} placeholder="Comments, guidance or required actions…" /></F>
             <button className="ws-btn"><Send size={16} />Send feedback</button>

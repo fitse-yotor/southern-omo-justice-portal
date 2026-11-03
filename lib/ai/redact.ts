@@ -1,6 +1,6 @@
 // Removes personal identifiers before report text leaves the server.
 // Known names (prosecutors, case parties) are replaced with stable placeholders so the
-// summary can still say "[PERSON-2] closed two cases" and the Director can map them back.
+// summary can still say "[PERSON-2] closed two cases" and the Office Head can map them back.
 
 export type Redaction = { text: string; map: Record<string, string> };
 

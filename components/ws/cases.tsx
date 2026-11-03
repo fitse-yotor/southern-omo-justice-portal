@@ -2,46 +2,46 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CalendarClock, FilePlus2, History, Lock, MessageSquare, Plus, Save, Search, Send, Timer, UserRoundCog } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CalendarClock, FilePlus2, History, KeyRound, Lock, MessageSquare, Plus, Save, Search, Send, Timer, Unlock, UserRoundCog } from 'lucide-react';
 import { toast } from 'sonner';
-import { daysLeft, isOverdue, slaState, useWS } from '@/lib/ws/store';
-import { CASE_STATUSES, OFFICES, type Case, type CaseStatus } from '@/lib/ws/types';
+import { closedLate, daysLeft, hasPermission, isLocked, isOverdue, slaState, useWS } from '@/lib/ws/store';
+import { CASE_STATUSES, CASE_SUBJECTS, OFFICES, type Case, type CaseStatus } from '@/lib/ws/types';
 import { Avatar, DataTable, Empty, F, PageHead, Panel, Pill, Sel, SlaPill, StatusPill, ago, fmtDate, fmtDateTime } from './ui';
 import { useQueryParam } from './library';
 import { CaseDocuments, CaseHearings } from './prosecution-extra';
 
 export function CaseList() {
-  const { data, user, can, userName } = useWS();
-  const all = can('cases.viewAll');
+  const { data, can, userName, myCases } = useWS();
+  const all = can('cases.viewAll'), office = !all && can('cases.viewOffice');
   const filterParam = useQueryParam('filter');
   const [q, setQ] = useState(''), [status, setStatus] = useState('all'), [cat, setCat] = useState('all'), [pros, setPros] = useState('all'), [sla, setSla] = useState('all');
   useEffect(() => { if (filterParam) setSla(filterParam); }, [filterParam]);
-  const base = all ? data.cases : data.cases.filter(c => c.prosecutorId === user!.id);
+  const base = myCases;
   const list = base.filter(c => (status === 'all' || c.status === status) && (cat === 'all' || c.categoryId === cat) && (pros === 'all' || c.prosecutorId === pros)
-    && (sla === 'all' || slaState(c, data.settings.dueSoonDays) === sla) && (c.caseNo + ' ' + c.title + ' ' + c.parties).toLowerCase().includes(q.toLowerCase()))
+    && (sla === 'all' || slaState(c, data.settings.dueSoonDays) === sla) && (c.caseNo + ' ' + c.title + ' ' + c.parties + ' ' + c.subject).toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => Number(isOverdue(b)) - Number(isOverdue(a)) || a.dueAt.localeCompare(b.dueAt));
   const counts = { all: base.length, overdue: base.filter(c => slaState(c) === 'overdue').length, 'due-soon': base.filter(c => slaState(c, data.settings.dueSoonDays) === 'due-soon').length, 'on-track': base.filter(c => slaState(c, data.settings.dueSoonDays) === 'on-track').length, closed: base.filter(c => c.status === 'Closed').length };
   return <>
-    <PageHead eyebrow="PROSECUTION" title={all ? 'All cases' : 'My cases'} actions={can('cases.create') ? <Link className="ws-btn" href="/dashboard/cases/new"><FilePlus2 size={16} />New case</Link> : undefined}>
-      {all ? 'Every case registered by prosecutors and the Director, with live SLA status.' : 'Cases assigned to you. Status updates are locked once a case passes its SLA due date.'}
+    <PageHead eyebrow="PROSECUTION" title={all ? 'All cases' : office ? 'Office cases' : 'My cases'} actions={can('cases.create') ? <Link className="ws-btn" href="/dashboard/cases/new"><FilePlus2 size={16} />New case</Link> : undefined}>
+      {all ? 'Every case registered by prosecutors and the Office Head, with live SLA status.' : office ? 'Cases of your woreda office, with live SLA status.' : 'Cases assigned to you. Status updates are locked once a case passes its SLA due date, until the Office Head gives permission.'}
     </PageHead>
     <div className="ws-chips">{([['all', 'All'], ['overdue', 'Overdue'], ['due-soon', 'Due soon'], ['on-track', 'On track'], ['closed', 'Closed']] as const).map(([k, l]) => <button key={k} aria-pressed={sla === k} className={'chip-' + k} onClick={() => setSla(k)}>{l}<em>{counts[k]}</em></button>)}</div>
     <Panel>
       <div className="ws-filters">
         <div className="lib-search"><Search size={16} /><input placeholder="Search case no., title or parties" value={q} onChange={e => setQ(e.target.value)} /></div>
         <Sel aria-label="Status" value={status} onChange={setStatus} options={[['all', 'All statuses'], ...CASE_STATUSES.map(s => [s, s] as [string, string])]} />
-        <Sel aria-label="Category" value={cat} onChange={setCat} options={[['all', 'All categories'], ...data.caseCategories.map(c => [c.id, c.name] as [string, string])]} />
-        {all && <Sel aria-label="Prosecutor" value={pros} onChange={setPros} options={[['all', 'All prosecutors'], ...data.users.filter(u => u.roleId === 'prosecutor').map(u => [u.id, u.name] as [string, string])]} />}
+        <Sel aria-label="Case type" value={cat} onChange={setCat} options={[['all', 'All case types'], ...data.caseCategories.map(c => [c.id, c.name] as [string, string])]} />
+        {(all || office) && <Sel aria-label="Prosecutor" value={pros} onChange={setPros} options={[['all', 'All prosecutors'], ...data.users.filter(u => u.roleId === 'prosecutor').map(u => [u.id, u.name] as [string, string])]} />}
       </div>
       <div className="ws-table-wrap"><table className="ws-table cards-on-mobile">
-        <thead><tr><th>Case</th><th>Category</th>{all && <th>Prosecutor</th>}<th>Status</th><th>Due date</th><th>SLA</th></tr></thead>
+        <thead><tr><th>Case</th><th>Case type</th>{(all || office) && <th>Prosecutor</th>}<th>Status</th><th>Due date</th><th>SLA</th></tr></thead>
         <tbody>{list.map(c => <tr key={c.id} className={isOverdue(c) ? 'row-overdue' : ''}>
           <td data-label="Case"><Link href={'/dashboard/cases/' + c.id} className="ws-case-link"><b>{c.title}</b><small>{c.caseNo} · {c.office}{c.priority !== 'Normal' ? ' · ' + c.priority : ''}</small></Link></td>
-          <td data-label="Category">{data.caseCategories.find(x => x.id === c.categoryId)?.name}</td>
-          {all && <td data-label="Prosecutor">{userName(c.prosecutorId)}</td>}
+          <td data-label="Case type">{data.caseCategories.find(x => x.id === c.categoryId)?.name}<small className="ws-sub">{c.subject}</small></td>
+          {(all || office) && <td data-label="Prosecutor">{userName(c.prosecutorId)}</td>}
           <td data-label="Status"><StatusPill status={c.status} /></td>
           <td data-label="Due">{fmtDate(c.dueAt)}</td>
-          <td data-label="SLA"><SlaPill c={c} />{!all && isOverdue(c) && <Lock size={14} className="ws-lock" aria-label="Locked" />}</td>
+          <td data-label="SLA"><SlaPill c={c} />{isLocked(c) && <Lock size={14} className="ws-lock" aria-label="Locked" />}</td>
         </tr>)}</tbody>
       </table>{!list.length && <Empty title="No cases match">Change the filters or register a new case.</Empty>}</div>
     </Panel>
@@ -51,14 +51,14 @@ export function CaseList() {
 export function CaseNew() {
   const { data, user, can, actions } = useWS();
   const router = useRouter();
-  const director = can('cases.viewAll');
-  const prosecutors = data.users.filter(u => u.roleId === 'prosecutor' && u.status === 'active');
-  const [f, setF] = useState({ title: '', categoryId: data.caseCategories[0].id, prosecutorId: director ? prosecutors[0]?.id || '' : user!.id, office: director ? prosecutors[0]?.office || OFFICES[0] : user!.office, parties: '', description: '', priority: 'Normal' as Case['priority'], openedAt: new Date().toISOString().slice(0, 10) });
+  const director = can('cases.viewAll') || can('cases.viewOffice');
+  const prosecutors = data.users.filter(u => u.roleId === 'prosecutor' && u.status === 'active' && (can('cases.viewAll') || u.office === user!.office));
+  const [f, setF] = useState({ title: '', categoryId: data.caseCategories[0].id, subject: CASE_SUBJECTS[0], prosecutorId: director ? prosecutors[0]?.id || '' : user!.id, office: director ? prosecutors[0]?.office || OFFICES[0] : user!.office, parties: '', description: '', priority: 'Normal' as Case['priority'], openedAt: new Date().toISOString().slice(0, 10) });
   const cat = data.caseCategories.find(c => c.id === f.categoryId)!;
   const due = new Date(new Date(f.openedAt).getTime() + cat.slaDays * 86400000);
   return <>
     <PageHead eyebrow="PROSECUTION" title="Register a new case" actions={<Link className="ws-btn ghost" href="/dashboard/cases"><ArrowLeft size={16} />Back to cases</Link>}>
-      {director ? 'Create a case and assign it to a prosecutor. The SLA due date is set from the case category.' : 'Register a case you are handling. The SLA due date is set from the case category.'}
+      {director ? 'Create a case and assign it to a prosecutor. The SLA due date is set from the case type.' : 'Register a case you are handling. The SLA due date is set from the case type.'}
     </PageHead>
     <form className="ws-form-layout" onSubmit={e => {
       e.preventDefault();
@@ -68,7 +68,8 @@ export function CaseNew() {
       <Panel title="Case details">
         <div className="ws-grid2">
           <F label="Case title" wide><input className="ws-input" required value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="e.g. Livestock theft – Dimeka" /></F>
-          <F label="Case category"><Sel value={f.categoryId} onChange={v => setF({ ...f, categoryId: v })} options={data.caseCategories.map(c => [c.id, `${c.name} (${c.slaDays} days)`] as [string, string])} /></F>
+          <F label="Case type"><Sel value={f.categoryId} onChange={v => setF({ ...f, categoryId: v })} options={data.caseCategories.map(c => [c.id, `${c.name} (${c.slaDays} days)`] as [string, string])} /></F>
+          <F label="Subject"><Sel value={f.subject} onChange={v => setF({ ...f, subject: v })} options={CASE_SUBJECTS} /></F>
           <F label="Priority"><Sel value={f.priority} onChange={v => setF({ ...f, priority: v as Case['priority'] })} options={['Normal', 'High', 'Urgent']} /></F>
           {director ? <F label="Assign to prosecutor"><Sel value={f.prosecutorId} onChange={v => setF({ ...f, prosecutorId: v, office: prosecutors.find(p => p.id === v)?.office || f.office })} options={prosecutors.map(p => [p.id, `${p.name} – ${p.office}`] as [string, string])} /></F>
             : <F label="Prosecutor"><input className="ws-input" disabled value={user!.name} /></F>}
@@ -83,7 +84,7 @@ export function CaseNew() {
           <Timer size={26} />
           <p><b>{cat.name}</b> cases must be completed within <b>{cat.slaDays} days</b>.</p>
           <div className="ws-due-big"><small>Due date</small><strong>{fmtDate(due.toISOString())}</strong></div>
-          <p className="ws-sub">After the due date, the prosecutor cannot change the status until the Director extends the SLA.</p>
+          <p className="ws-sub">After the due date the case is locked. The prosecutor must go to the Office Head, who can give permission to continue – the case still counts as overdue in KPIs.</p>
           <button className="ws-btn block"><Save size={16} />Register case</button>
         </Panel>
       </aside>
@@ -96,16 +97,19 @@ export function CaseDetail({ id }: { id: string }) {
   const c = data.cases.find(x => x.id === id);
   const [to, setTo] = useState<CaseStatus>('Under investigation'), [note, setNote] = useState(''), [comment, setComment] = useState('');
   const [extDays, setExtDays] = useState('14'), [extReason, setExtReason] = useState(''), [reassign, setReassign] = useState('');
+  const { myCases } = useWS();
   useEffect(() => { if (c) { const i = CASE_STATUSES.indexOf(c.status); setTo(CASE_STATUSES[Math.min(i + 1, CASE_STATUSES.length - 1)]); setReassign(c.prosecutorId); } }, [c?.status, c?.prosecutorId]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!c || (!can('cases.viewAll') && c.prosecutorId !== user!.id)) return <Empty title="Case not found">It may not be assigned to you.</Empty>;
+  if (!c || !myCases.some(x => x.id === c.id)) return <Empty title="Case not found">It may not be assigned to you.</Empty>;
   const cat = data.caseCategories.find(x => x.id === c.categoryId)!;
   const overdue = isOverdue(c);
-  const locked = overdue && !can('cases.extend');
+  const permitted = hasPermission(c);
+  const locked = isLocked(c) && !can('cases.extend');
   const canUpdate = can('cases.update') && (can('cases.viewAll') || c.prosecutorId === user!.id);
+
   const canComment = can('cases.comment') || c.prosecutorId === user!.id;
   const timeline = [
     ...data.statusChanges.filter(s => s.caseId === id).map(s => ({ at: s.at, by: s.by, kind: 'status' as const, title: s.from ? `${s.from} → ${s.to}` : `Registered`, body: s.note })),
-    ...data.extensions.filter(x => x.caseId === id).map(x => ({ at: x.at, by: x.by, kind: 'ext' as const, title: `SLA extended by ${x.days} days (new due ${fmtDate(x.newDue)})`, body: x.reason })),
+    ...data.extensions.filter(x => x.caseId === id).map(x => ({ at: x.at, by: x.by, kind: 'ext' as const, title: `Permission given for ${x.days} days (until ${fmtDate(x.newDue)}) – still overdue`, body: x.reason })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const comments = data.comments.filter(x => x.caseId === id).sort((a, b) => a.at.localeCompare(b.at));
   const total = (new Date(c.dueAt).getTime() - new Date(c.openedAt).getTime()) / 86400000;
@@ -114,9 +118,11 @@ export function CaseDetail({ id }: { id: string }) {
   return <>
     <Link href="/dashboard/cases" className="ws-back"><ArrowLeft size={15} />All cases</Link>
     <div className="ws-case-head">
-      <div><div className="ws-eyebrow">{c.caseNo}</div><h1>{c.title}</h1><div className="ws-case-pills"><StatusPill status={c.status} /><SlaPill c={c} />{c.priority !== 'Normal' && <Pill tone="red">{c.priority}</Pill>}<Pill>{cat.name}</Pill></div></div>
+      <div><div className="ws-eyebrow">{c.caseNo}</div><h1>{c.title}</h1><div className="ws-case-pills"><StatusPill status={c.status} /><SlaPill c={c} />{c.priority !== 'Normal' && <Pill tone="red">{c.priority}</Pill>}<Pill>{cat.name}</Pill><Pill>{c.subject}</Pill>{closedLate(c) && <Pill tone="red">Closed late</Pill>}</div></div>
     </div>
-    {overdue && <div className={'ws-banner ' + (locked ? 'bad' : 'warn')}><Lock /><div><b>{locked ? 'SLA overdue — status updates are locked' : 'SLA overdue'}</b><p>{locked ? `This case passed its due date (${fmtDate(c.dueAt)}). Ask the Director to review and extend the SLA to unlock updates.` : `Due ${fmtDate(c.dueAt)}. The prosecutor cannot update the status until you extend the SLA below.`}</p></div></div>}
+    {overdue && (permitted
+      ? <div className="ws-banner warn"><Unlock /><div><b>Overdue – permission given until {fmtDate(c.permitUntil)}</b><p>The Office Head allowed work to continue after the prosecutor came to the office. Status updates and reports are possible, but the case still counts as <b>overdue</b> in KPIs (due {fmtDate(c.dueAt)}).</p></div></div>
+      : <div className={'ws-banner ' + (locked ? 'bad' : 'warn')}><Lock /><div><b>{locked ? 'SLA overdue — status updates are locked' : 'SLA overdue — locked for the prosecutor'}</b><p>{locked ? `This case passed its due date (${fmtDate(c.dueAt)}). Go to the Office Head to explain the delay. The Office Head can give permission to continue; the case will still count as overdue.` : `Due ${fmtDate(c.dueAt)}. The prosecutor cannot update this case until you give permission below. The case stays overdue in KPIs.`}</p></div></div>)}
     <div className="ws-detail">
       <div className="ws-detail-main">
         <Panel title="Case information">
@@ -132,27 +138,28 @@ export function CaseDetail({ id }: { id: string }) {
             </form>}
         </Panel>}
         <CaseDocuments c={c} />
-        <Panel title={<><MessageSquare size={18} />Director comments</>}>
+        <Panel title={<><MessageSquare size={18} />Comments</>}>
           {comments.length ? <ul className="ws-comments">{comments.map(m => <li key={m.id} className={m.by === user!.id ? 'mine' : ''}><Avatar name={userName(m.by)} size={30} /><div><b>{userName(m.by)}</b><small>{data.roles.find(r => r.id === data.users.find(u => u.id === m.by)?.roleId)?.name} · {fmtDateTime(m.at)}</small><p>{m.body}</p></div></li>)}</ul> : <Empty title="No comments yet" />}
           {canComment && <form className="ws-comment-box" onSubmit={e => { e.preventDefault(); if (!comment.trim()) return; actions.addComment(id, comment.trim()); setComment(''); toast.success('Comment added'); }}>
-            <textarea className="ws-input" rows={2} placeholder={can('cases.comment') ? 'Write a comment or instruction for the prosecutor…' : 'Reply to the Director…'} value={comment} onChange={e => setComment(e.target.value)} />
+            <textarea className="ws-input" rows={2} placeholder={can('cases.comment') ? 'Write a comment or instruction for the prosecutor…' : 'Reply to the Office Head…'} value={comment} onChange={e => setComment(e.target.value)} />
             <button className="ws-btn" aria-label="Send comment"><Send size={16} /></button>
           </form>}
         </Panel>
       </div>
       <aside className="ws-detail-side">
         <Panel title={<><CalendarClock size={18} />SLA</>}>
-          <div className="ws-sla-box"><div><small>Category SLA</small><b>{cat.slaDays} days</b></div><div><small>Due date</small><b>{fmtDate(c.dueAt)}</b></div><div><small>{overdue ? 'Overdue by' : 'Days left'}</small><b className={overdue ? 'red' : ''}>{c.status === 'Closed' ? '—' : Math.abs(daysLeft(c))}</b></div></div>
+          <div className="ws-sla-box"><div><small>{cat.name} SLA</small><b>{cat.slaDays} days</b></div><div><small>Due date</small><b>{fmtDate(c.dueAt)}</b></div><div><small>{overdue ? 'Overdue by' : 'Days left'}</small><b className={overdue ? 'red' : ''}>{c.status === 'Closed' ? '—' : Math.abs(daysLeft(c))}</b></div></div>
           <div className="ws-meter big"><i style={{ width: used + '%' }} className={used >= 100 ? 'bad' : used > 80 ? 'warn' : ''} /></div>
           <small className="ws-sub">{Math.round(used)}% of SLA time used</small>
-          {can('cases.extend') && c.status !== 'Closed' && <form className="ws-form ws-ext" onSubmit={e => { e.preventDefault(); if (!extReason.trim()) return toast.error('Give a reason'); actions.extendSla(id, Number(extDays), extReason.trim()); setExtReason(''); toast.success('SLA extended — prosecutor updates unlocked'); }}>
-            <b>Extend SLA</b>
-            <div className="ws-grid2"><F label="Extra days"><Sel value={extDays} onChange={setExtDays} options={['7', '14', '30', '60']} /></F><F label="Reason"><input className="ws-input" value={extReason} onChange={e => setExtReason(e.target.value)} placeholder="Justification" /></F></div>
-            <button className="ws-btn sm"><Timer size={15} />Extend</button>
+          {can('cases.extend') && c.status !== 'Closed' && overdue && <form className="ws-form ws-ext" onSubmit={e => { e.preventDefault(); if (!extReason.trim()) return toast.error('Write what the prosecutor explained'); actions.grantPermission(id, Number(extDays), extReason.trim()); setExtReason(''); toast.success('Permission given — the prosecutor can continue; the case stays overdue in KPIs'); }}>
+            <b><KeyRound size={14} /> {permitted ? 'Change permission' : 'Give permission to continue'}</b>
+            <p className="ws-sub" style={{ margin: 0 }}>Use after the prosecutor has come to the office. The due date does not change.</p>
+            <div className="ws-grid2"><F label="Allow for"><Sel value={extDays} onChange={setExtDays} options={[['7', '7 days'], ['14', '14 days'], ['30', '30 days'], ['60', '60 days']]} /></F><F label="Reason"><input className="ws-input" value={extReason} onChange={e => setExtReason(e.target.value)} placeholder="Reason given by the prosecutor" /></F></div>
+            <div className="ws-inline"><button className="ws-btn sm"><Unlock size={15} />Give permission</button>{permitted && <button type="button" className="ws-btn sm ghost danger" onClick={() => { actions.revokePermission(id); toast.success('Permission withdrawn – case locked again'); }}>Withdraw</button>}</div>
           </form>}
-          {can('cases.viewAll') && can('cases.create') && <form className="ws-form ws-ext" onSubmit={e => { e.preventDefault(); actions.reassignCase(id, reassign); toast.success('Case reassigned'); }}>
+          {(can('cases.viewAll') || can('cases.viewOffice')) && can('cases.create') && <form className="ws-form ws-ext" onSubmit={e => { e.preventDefault(); actions.reassignCase(id, reassign); toast.success('Case reassigned'); }}>
             <b>Assigned prosecutor</b>
-            <div className="ws-inline"><Sel value={reassign} onChange={setReassign} options={data.users.filter(u => u.roleId === 'prosecutor' && u.status === 'active').map(u => [u.id, u.name] as [string, string])} /><button className="ws-btn sm ghost" disabled={reassign === c.prosecutorId}><UserRoundCog size={15} />Assign</button></div>
+            <div className="ws-inline"><Sel value={reassign} onChange={setReassign} options={data.users.filter(u => u.roleId === 'prosecutor' && u.status === 'active' && (can('cases.viewAll') || u.office === user!.office)).map(u => [u.id, u.name] as [string, string])} /><button className="ws-btn sm ghost" disabled={reassign === c.prosecutorId}><UserRoundCog size={15} />Assign</button></div>
           </form>}
         </Panel>
         <CaseHearings c={c} />
@@ -170,9 +177,9 @@ export function SlaSettings() {
   const [apply, setApply] = useState(true), [nc, setNc] = useState({ name: '', days: '30' });
   useEffect(() => { setVals(Object.fromEntries(data.caseCategories.map(c => [c.id, String(c.slaDays)]))); }, [data.caseCategories]);
   return <>
-    <PageHead eyebrow="DIRECTOR" title="SLA by case category">Set the maximum number of days for each case category. When a case passes its due date, prosecutors can no longer change its status until you extend it.</PageHead>
+    <PageHead eyebrow="OFFICE HEAD" title="SLA by case type">Set the maximum number of days for each case type (Ordinary, Appellate, Cassation). When a case passes its due date it is locked for the prosecutor until you give permission – it still counts as overdue.</PageHead>
     <Panel actions={<label className="ws-check"><input type="checkbox" checked={apply} onChange={e => setApply(e.target.checked)} />Recalculate due dates of open cases when saving</label>}>
-      <DataTable head={['Category', 'SLA (days)', 'Open cases', 'Overdue', 'Last changed', '']}>
+      <DataTable head={['Case type', 'SLA (days)', 'Open cases', 'Overdue', 'Last changed', '']}>
         {data.caseCategories.map(cc => {
           const open = data.cases.filter(c => c.categoryId === cc.id && c.status !== 'Closed');
           const changed = vals[cc.id] !== String(cc.slaDays);
@@ -187,9 +194,9 @@ export function SlaSettings() {
         })}
       </DataTable>
     </Panel>
-    <Panel title="Add case category">
-      <form className="ws-inline wrap" onSubmit={e => { e.preventDefault(); if (!nc.name.trim()) return; actions.addCaseCategory(nc.name.trim(), Number(nc.days)); setNc({ name: '', days: '30' }); toast.success('Category added'); }}>
-        <F label="Category name"><input className="ws-input" value={nc.name} onChange={e => setNc({ ...nc, name: e.target.value })} placeholder="e.g. Cybercrime" /></F>
+    <Panel title="Add case type">
+      <form className="ws-inline wrap" onSubmit={e => { e.preventDefault(); if (!nc.name.trim()) return; actions.addCaseCategory(nc.name.trim(), Number(nc.days)); setNc({ name: '', days: '30' }); toast.success('Case type added'); }}>
+        <F label="Case type name"><input className="ws-input" value={nc.name} onChange={e => setNc({ ...nc, name: e.target.value })} placeholder="e.g. Review case" /></F>
         <F label="SLA days"><input className="ws-input" type="number" min={1} value={nc.days} onChange={e => setNc({ ...nc, days: e.target.value })} /></F>
         <button className="ws-btn"><Plus size={16} />Add</button>
       </form>

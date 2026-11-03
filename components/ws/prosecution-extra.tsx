@@ -14,8 +14,7 @@ import { AiSummaryPanel } from './ai-summary';
 
 const DAY = 86400000;
 function useMyCases() {
-  const { data, user, can } = useWS();
-  return can('cases.viewAll') ? data.cases : data.cases.filter(c => c.prosecutorId === user!.id);
+  return useWS().myCases;
 }
 
 /* ================= 7. Hearing calendar ================= */
@@ -64,7 +63,7 @@ export function CaseHearings({ c }: { c: Case }) {
   const { data, can, user } = useWS();
   const [edit, setEdit] = useState<Partial<Hearing> | null>(null);
   const list = data.hearings.filter(h => h.caseId === c.id).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
-  const canEdit = can('cases.viewAll') || c.prosecutorId === user!.id;
+  const canEdit = can('cases.viewAll') || can('cases.viewOffice') || c.prosecutorId === user!.id;
   const today = isoDay(new Date());
   return <Panel title={<><CalendarPlus size={18} />Hearings</>} actions={canEdit && c.status !== 'Closed' ? <button className="ws-btn sm ghost" onClick={() => setEdit({ date: isoDay(new Date(Date.now() + 7 * DAY)), time: '09:00', court: list[0]?.court || '', purpose: 'Evidence hearing' })}><Plus size={14} />Add</button> : undefined}>
     {list.length ? <ul className="ws-hearings">{list.map(h => <li key={h.id} className={h.date >= today ? 'up' : ''}><button onClick={() => canEdit && setEdit(h)}><b>{fmtDate(h.date + 'T12:00')} · {h.time}</b><span>{h.purpose} · {h.court}</span>{h.outcome && <small>{h.outcome}</small>}</button>{h.date >= today ? <Pill tone="blue">Upcoming</Pill> : <Pill>Held</Pill>}</li>)}</ul> : <Empty title="No hearings yet" />}
@@ -78,7 +77,7 @@ function VersionLink({ url, name, children }: { url: string; name: string; child
 export function CaseDocuments({ c }: { c: Case }) {
   const { data, actions, userName, can, user } = useWS();
   const docs = data.caseDocs.filter(d => d.caseId === c.id);
-  const canEdit = can('cases.viewAll') || c.prosecutorId === user!.id;
+  const canEdit = can('cases.viewAll') || can('cases.documents') || c.prosecutorId === user!.id;
   const [up, setUp] = useState<{ existing?: CaseDoc } | null>(null), [hist, setHist] = useState<CaseDoc | null>(null);
   const [f, setF] = useState({ docType: DOC_TYPES[0], title: '', note: '' }), [file, setFile] = useState<File | null>(null), [busy, setBusy] = useState(false);
   const open = (existing?: CaseDoc) => { setF({ docType: existing?.docType || DOC_TYPES[0], title: existing?.title || '', note: '' }); setFile(null); setUp({ existing }); };
@@ -112,20 +111,20 @@ export function CaseDocuments({ c }: { c: Case }) {
 /* ================= 9. My tasks ================= */
 type AutoTask = { id: string; title: string; sub: string; due?: string; href: string; tone: 'red' | 'gold' | 'blue' };
 export function useAutoTasks(): AutoTask[] {
-  const { data, user, can } = useWS();
+  const { data, user, can, myCases } = useWS();
   if (!user) return [];
   const out: AutoTask[] = [];
-  const mine = can('cases.viewAll') ? data.cases : data.cases.filter(c => c.prosecutorId === user.id);
-  mine.filter(c => slaState(c, data.settings.dueSoonDays) === 'overdue').forEach(c => out.push({ id: 'od-' + c.id, title: can('cases.extend') ? `Review overdue case: ${c.title}` : `Overdue – ask Director for SLA extension: ${c.title}`, sub: c.caseNo, due: c.dueAt.slice(0, 10), href: '/dashboard/cases/' + c.id, tone: 'red' }));
+  const mine = myCases;
+  mine.filter(c => slaState(c, data.settings.dueSoonDays) === 'overdue').forEach(c => out.push({ id: 'od-' + c.id, title: can('cases.extend') ? `Review overdue case: ${c.title}` : `Overdue – ask Office Head for SLA extension: ${c.title}`, sub: c.caseNo, due: c.dueAt.slice(0, 10), href: '/dashboard/cases/' + c.id, tone: 'red' }));
   mine.filter(c => slaState(c, data.settings.dueSoonDays) === 'due-soon').forEach(c => out.push({ id: 'ds-' + c.id, title: `Complete before SLA: ${c.title}`, sub: c.caseNo, due: c.dueAt.slice(0, 10), href: '/dashboard/cases/' + c.id, tone: 'gold' }));
   const today = isoDay(new Date()), week = isoDay(new Date(Date.now() + 7 * DAY));
   data.hearings.filter(h => mine.some(c => c.id === h.caseId) && h.date >= today && h.date <= week).forEach(h => out.push({ id: 'hr-' + h.id, title: `Prepare for ${h.purpose.toLowerCase()}: ${data.cases.find(c => c.id === h.caseId)?.title}`, sub: `${h.court} · ${h.time}`, due: h.date, href: '/dashboard/calendar', tone: 'blue' }));
   if (can('preports.submit')) {
     const rs = data.preports.filter(r => r.prosecutorId === user.id);
-    ([['Daily', 1.5], ['Weekly', 7], ['Monthly', 31]] as const).forEach(([p, win]) => { if (!rs.some(r => r.period === p && Date.now() - new Date(r.submittedAt).getTime() < win * DAY)) out.push({ id: 'rp-' + p, title: `Submit ${p.toLowerCase()} report`, sub: 'Report to the Director', due: today, href: '/dashboard/periodic-reports?new=' + p, tone: 'gold' }); });
+    ([['Daily', 1.5], ['Weekly', 7], ['Monthly', 31]] as const).forEach(([p, win]) => { if (!rs.some(r => r.period === p && Date.now() - new Date(r.submittedAt).getTime() < win * DAY)) out.push({ id: 'rp-' + p, title: `Submit ${p.toLowerCase()} report`, sub: 'Report to the Office Head', due: today, href: '/dashboard/periodic-reports?new=' + p, tone: 'gold' }); });
     data.comments.filter(cm => mine.some(c => c.id === cm.caseId) && cm.by !== user.id).forEach(cm => {
       const answered = data.comments.some(x => x.caseId === cm.caseId && x.by === user.id && x.at > cm.at);
-      if (!answered) out.push({ id: 'cm-' + cm.id, title: `Answer Director comment on ${data.cases.find(c => c.id === cm.caseId)?.caseNo}`, sub: cm.body.slice(0, 80), href: '/dashboard/cases/' + cm.caseId, tone: 'blue' });
+      if (!answered) out.push({ id: 'cm-' + cm.id, title: `Answer Office Head comment on ${data.cases.find(c => c.id === cm.caseId)?.caseNo}`, sub: cm.body.slice(0, 80), href: '/dashboard/cases/' + cm.caseId, tone: 'blue' });
     });
   }
   if (can('preports.review')) { const n = data.preports.filter(r => r.status === 'Submitted').length; if (n) out.push({ id: 'rv', title: `Review ${n} prosecutor report${n > 1 ? 's' : ''}`, sub: 'Give feedback', href: '/dashboard/periodic-reports', tone: 'gold' }); }
@@ -169,7 +168,7 @@ export function PerformancePage() {
   const avg = data.ratings.length ? (data.ratings.reduce((s, r) => s + r.stars, 0) / data.ratings.length).toFixed(1) : '–';
   const closedTotal = perMonth.reduce((s, m) => s + m.closed, 0), openedTotal = perMonth.reduce((s, m) => s + m.opened, 0);
   return <>
-    <PageHead eyebrow="DIRECTOR" title="Performance dashboard">Six-month trends for case flow, SLA compliance, workload and service quality. Switch any chart to a table.</PageHead>
+    <PageHead eyebrow="OFFICE HEAD" title="Performance dashboard">Six-month trends for case flow, SLA compliance, workload and service quality. Switch any chart to a table.</PageHead>
     <div className="ws-stats">
       <div className="ws-stat"><span className="ws-stat-label">Opened (6 months)</span><strong>{openedTotal}</strong></div>
       <div className="ws-stat tone-ink"><span className="ws-stat-label">Closed / judged</span><strong>{closedTotal}</strong><small>clearance {openedTotal ? Math.round((closedTotal / openedTotal) * 100) : 0}%</small></div>
@@ -193,7 +192,7 @@ export function WorkloadPage() {
   const move = (caseId: string, to: string) => { const c = data.cases.find(x => x.id === caseId); if (!c || c.prosecutorId === to) return; actions.reassignCase(caseId, to); toast.success(`${c.caseNo} reassigned to ${userName(to)}`); };
   const max = Math.max(1, ...pros.map(p => data.cases.filter(c => c.prosecutorId === p.id && c.status !== 'Closed').length));
   return <>
-    <PageHead eyebrow="DIRECTOR" title="Workload balancing">Open cases per prosecutor. Drag a case card to another prosecutor to reassign it (on phones use “Move to”).</PageHead>
+    <PageHead eyebrow="OFFICE HEAD" title="Workload balancing">Open cases per prosecutor. Drag a case card to another prosecutor to reassign it (on phones use “Move to”).</PageHead>
     <div className="wl-board">{pros.map(p => { const cs = data.cases.filter(c => c.prosecutorId === p.id && c.status !== 'Closed').sort((a, b) => a.dueAt.localeCompare(b.dueAt)); const od = cs.filter(c => isOverdue(c)).length;
       return <section key={p.id} className={'wl-col' + (over === p.id ? ' over' : '')} onDragOver={e => { e.preventDefault(); setOver(p.id); }} onDragLeave={() => setOver(null)} onDrop={e => { e.preventDefault(); setOver(null); if (drag) move(drag, p.id); setDrag(null); }}>
         <header><b>{p.name}</b><small>{p.office}</small><div className="wl-meter"><i style={{ width: (cs.length / max) * 100 + '%' }} className={cs.length >= max ? 'hi' : ''} /></div><span>{cs.length} open{od ? ` · ${od} overdue` : ''}</span></header>
@@ -213,7 +212,7 @@ export function CaseMapPage() {
   const markers = stats.filter(s => s.cs.length).map(s => ({ office: s.o, value: s.cs.length, tone: (s.od ? 'red' : s.ds ? 'gold' : 'teal') as 'red', size: 9 + Math.min(8, s.cs.length * 1.5) }));
   const cur = stats.find(s => s.o === sel);
   return <>
-    <PageHead eyebrow="DIRECTOR" title="Case map">Open cases by woreda. Colour shows the worst SLA state in that woreda; the number is the count of open cases.</PageHead>
+    <PageHead eyebrow="OFFICE HEAD" title="Case map">Open cases by woreda. Colour shows the worst SLA state in that woreda; the number is the count of open cases.</PageHead>
     <div className="sp-map-layout">
       <Panel><OmoMap markers={markers} selected={sel || undefined} onSelect={setSel} legend={<span className="map-legend"><span><i style={{ background: '#c8201a' }} />Has overdue</span><span><i style={{ background: '#c8964f' }} />Due soon</span><span><i style={{ background: '#1f5646' }} />On track</span></span>} /></Panel>
       <Panel title={cur ? cur.o : 'Select a woreda'}>{cur ? <ul className="ws-list">{cur.cs.map(c => <li key={c.id}><Link href={'/dashboard/cases/' + c.id}><div><b>{c.title}</b><small>{c.caseNo} · {c.status}</small></div><SlaPill c={c} /></Link></li>)}</ul> :
@@ -237,7 +236,7 @@ export function DigestPage() {
   const label = `${start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   const totals = useMemo(() => reports.reduce((t, r) => ({ n: t.n + r.newCases, c: t.c + r.closedCases, h: t.h + r.hearings }), { n: 0, c: 0, h: 0 }), [reports]);
   return <div className="digest">
-    <PageHead eyebrow="DIRECTOR · WEEKLY DIGEST" title={label} actions={<div className="ws-head-actions sp-noprint"><Sel aria-label="Week" value={String(offset)} onChange={v => setOffset(+v)} options={[['0', 'This week'], ['1', 'Last week'], ['2', '2 weeks ago'], ['3', '3 weeks ago']]} /><button className="ws-btn ghost" onClick={() => window.print()}><Printer size={16} />Print</button></div>}>One page with this week’s key numbers, overdue items, hearings and the AI summary.</PageHead>
+    <PageHead eyebrow="OFFICE HEAD · WEEKLY DIGEST" title={label} actions={<div className="ws-head-actions sp-noprint"><Sel aria-label="Week" value={String(offset)} onChange={v => setOffset(+v)} options={[['0', 'This week'], ['1', 'Last week'], ['2', '2 weeks ago'], ['3', '3 weeks ago']]} /><button className="ws-btn ghost" onClick={() => window.print()}><Printer size={16} />Print</button></div>}>One page with this week’s key numbers, overdue items, hearings and the AI summary.</PageHead>
     <div className="ws-stats">
       <div className="ws-stat"><span className="ws-stat-label">Cases opened</span><strong>{opened.length}</strong></div>
       <div className="ws-stat tone-ink"><span className="ws-stat-label">Closed / judged</span><strong>{closed.length}</strong></div>

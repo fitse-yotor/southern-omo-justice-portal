@@ -1,7 +1,7 @@
 import { CASE_STATUSES, OFFICES as OFF_LIST, PERMISSIONS, type Case, type CaseStatus, type Permission, type WSData } from './types';
 
 const DAY = 86400000;
-export const SEED_VERSION = 6;
+export const SEED_VERSION = 7;
 
 export function seedData(now = Date.now()): WSData {
   const ago = (d: number, h = 9) => { const t = new Date(now - d * DAY); t.setHours(h, (d * 7) % 60, 0, 0); return t.toISOString(); };
@@ -11,10 +11,15 @@ export function seedData(now = Date.now()): WSData {
 
   const roles: WSData['roles'] = [
     { id: 'super-admin', name: 'Super Admin', description: 'Full access to every module, user, role and report.', permissions: all, system: true },
-    { id: 'library-admin', name: 'Library Admin', description: 'Uploads and organizes the digital library, approves researcher payments and contributions.', permissions: P('library.view', 'library.manage', 'library.approve', 'reports.library', 'reports.own'), system: true },
+    { id: 'library-admin', name: 'Library Head', description: 'Head of the digital library. Uploads and organizes documents, approves researcher payments and contributions, sees library reports.', permissions: P('library.view', 'library.manage', 'library.approve', 'reports.library', 'reports.own'), system: true },
     { id: 'researcher', name: 'Researcher', description: 'Registered researcher. Pays the library fee, accesses the full library after approval and contributes research.', permissions: P('library.contribute', 'reports.own'), system: true },
-    { id: 'director', name: 'Director', description: 'Oversees prosecution: creates and assigns cases, comments, sets SLAs and reviews prosecutor reports.', permissions: P('cases.create', 'cases.viewAll', 'cases.comment', 'cases.extend', 'cases.update', 'sla.manage', 'preports.review', 'reports.cases', 'library.view', 'reports.own'), system: true },
+    { id: 'director', name: 'Office Head', description: 'Head of the Justice Office. Sees all cases and all reports, creates and assigns cases, comments, sets SLAs, gives permission on overdue cases and reviews prosecutor reports.', permissions: P('cases.create', 'cases.viewAll', 'cases.comment', 'cases.extend', 'cases.update', 'cases.documents', 'sla.manage', 'preports.review', 'library.view', 'audit.view', 'reports.system', 'reports.library', 'reports.cases', 'reports.office', 'reports.citizen', 'reports.finance', 'reports.own'), system: true },
     { id: 'prosecutor', name: 'Prosecutor', description: 'Registers own cases, updates status within SLA and submits daily, weekly and monthly reports.', permissions: P('cases.create', 'cases.viewOwn', 'cases.update', 'preports.submit', 'library.view', 'reports.own'), system: true },
+    { id: 'woreda-head', name: 'Woreda Office Head', description: 'Head of a woreda justice office. Sees and comments on the cases of own woreda and reads its prosecutor reports.', permissions: P('cases.viewOffice', 'cases.comment', 'preports.view', 'reports.office', 'library.view', 'reports.own'), system: true },
+    { id: 'records-clerk', name: 'Records Clerk', description: 'Registers incoming cases for the woreda office, assigns them to prosecutors and uploads case documents.', permissions: P('cases.create', 'cases.viewOffice', 'cases.documents', 'reports.office', 'reports.own'), system: true },
+    { id: 'legal-aid-officer', name: 'Legal Aid Officer', description: 'Manages free legal aid appointments and sees citizen-service reports.', permissions: P('appointments.manage', 'reports.citizen', 'reports.own'), system: true },
+    { id: 'finance-officer', name: 'Finance Officer', description: 'Follows researcher library fees paid with Telebirr and the revenue reports.', permissions: P('reports.finance', 'reports.own'), system: true },
+    { id: 'auditor', name: 'Auditor', description: 'Read-only oversight: can look at all cases, reports and the audit log but cannot change anything.', permissions: P('cases.viewAll', 'preports.view', 'audit.view', 'library.view', 'reports.system', 'reports.library', 'reports.cases', 'reports.office', 'reports.citizen', 'reports.finance', 'reports.own'), system: true },
     { id: 'content-editor', name: 'Content Editor', description: 'Manages public website news, notices, events, gallery and legal documents.', permissions: P('cms.access', 'events.manage', 'reports.own'), system: true },
     { id: 'complaint-officer', name: 'Complaint Officer', description: 'Handles citizen complaints, legal aid appointments and service feedback.', permissions: P('cms.access', 'appointments.manage', 'events.manage', 'reports.own'), system: true },
   ];
@@ -35,6 +40,11 @@ export function seedData(now = Date.now()): WSData {
     u('u-r5', 'Biruk Tesfaye', 'biruk.tesfaye@example.com', 'researcher', '—', 14, { institution: 'Wolaita Sodo University', purpose: 'Comparative study of legal aid services' }),
     u('u-cms', 'Tigist Worku', 'editor@southomo.gov.et', 'content-editor', 'Zone office (Jinka)', 210),
     u('u-co', 'Mulugeta Asfaw', 'complaints@southomo.gov.et', 'complaint-officer', 'Zone office (Jinka)', 205),
+    u('u-wh', 'Ayele Doyo', 'woreda.head@southomo.gov.et', 'woreda-head', 'Hamer', 180),
+    u('u-rc', 'Hirut Abera', 'records@southomo.gov.et', 'records-clerk', 'Jinka Town', 170),
+    u('u-la', 'Genet Mamo', 'legalaid@southomo.gov.et', 'legal-aid-officer', 'Zone office (Jinka)', 160),
+    u('u-fin', 'Bekele Tola', 'finance@southomo.gov.et', 'finance-officer', 'Zone office (Jinka)', 160),
+    u('u-aud', 'Solomon Gebre', 'auditor@southomo.gov.et', 'auditor', 'Zone office (Jinka)', 120),
     u('u-p4', 'Kebede Lemma', 'kebede.lemma@southomo.gov.et', 'prosecutor', 'Male', 400, { status: 'inactive' }),
   ];
 
@@ -80,32 +90,37 @@ export function seedData(now = Date.now()): WSData {
   ];
 
   const caseCategories: WSData['caseCategories'] = [
-    ['cc-hom', 'Homicide', 120], ['cc-theft', 'Theft & robbery', 60], ['cc-gbv', 'Gender-based violence', 45], ['cc-fraud', 'Fraud & corruption', 90],
-    ['cc-land', 'Land & property dispute', 75], ['cc-traffic', 'Traffic offence', 30], ['cc-juv', 'Juvenile cases', 30],
+    ['ct-ord', 'Ordinary case', 90], ['ct-app', 'Appellate case', 60], ['ct-cas', 'Cassation case', 45],
   ].map(([id, name, slaDays]) => ({ id: id as string, name: name as string, slaDays: slaDays as number, updatedAt: ago(60), updatedBy: 'u-dir' }));
   const sla = Object.fromEntries(caseCategories.map(c => [c.id, c.slaDays]));
 
   const statusChanges: WSData['statusChanges'] = [];
-  const caseSpec: [string, string, string, number, CaseStatus, Case['priority'], string][] = [
-    ['Murder investigation – Turmi market incident', 'cc-hom', 'u-p2', 95, 'In court', 'Urgent', 'Public Prosecutor v. A. Bero'],
-    ['Livestock theft – 14 cattle, Dimeka', 'cc-theft', 'u-p2', 72, 'Charge filed', 'High', 'Public Prosecutor v. K. Lale and 2 others'],
-    ['Domestic violence complaint – Jinka kebele 02', 'cc-gbv', 'u-p1', 52, 'Under investigation', 'High', 'Public Prosecutor v. T. Mesele'],
-    ['Embezzlement of cooperative funds', 'cc-fraud', 'u-p1', 40, 'Under investigation', 'Normal', 'Public Prosecutor v. Cooperative cashier'],
-    ['Boundary dispute over farmland – South Ari', 'cc-land', 'u-p1', 30, 'Adjourned', 'Normal', 'Ayele family v. Gebre family'],
-    ['Hit-and-run on Jinka–Key Afer road', 'cc-traffic', 'u-p1', 34, 'In court', 'High', 'Public Prosecutor v. Unknown driver'],
-    ['Juvenile theft case – Key Afer', 'cc-juv', 'u-p3', 26, 'Registered', 'Normal', 'Public Prosecutor v. Minor (sealed)'],
-    ['Assault at Key Afer weekly market', 'cc-gbv', 'u-p3', 40, 'Charge filed', 'Normal', 'Public Prosecutor v. B. Ayke'],
-    ['Robbery of mobile money agent', 'cc-theft', 'u-p3', 66, 'Under investigation', 'Urgent', 'Public Prosecutor v. Unknown'],
-    ['Forgery of land certificate', 'cc-fraud', 'u-p2', 25, 'Under investigation', 'Normal', 'Public Prosecutor v. M. Dore'],
-    ['Motorcycle theft – Jinka Town', 'cc-theft', 'u-p1', 70, 'Closed', 'Normal', 'Public Prosecutor v. S. Haile'],
-    ['Traffic collision – Weyto bridge', 'cc-traffic', 'u-p2', 25, 'Registered', 'Normal', 'Public Prosecutor v. Truck driver'],
-    ['Child labour exploitation report', 'cc-juv', 'u-p1', 6, 'Under investigation', 'High', 'Public Prosecutor v. Employer'],
-    ['Attempted homicide – Omorate', 'cc-hom', 'u-p3', 45, 'Judgment delivered', 'Urgent', 'Public Prosecutor v. L. Nakwa'],
-    ['Inheritance property dispute – Male', 'cc-land', 'u-p2', 80, 'In court', 'Normal', 'Ergo family v. Shano family'],
-    ['Abduction complaint – Hamer', 'cc-gbv', 'u-p2', 15, 'Under investigation', 'Urgent', 'Public Prosecutor v. Unknown'],
+  // [title, case type, subject, prosecutor, days left until SLA (negative = overdue), status, priority, parties]
+  const caseSpec: [string, string, string, string, number, CaseStatus, Case['priority'], string][] = [
+    ['Murder investigation – Turmi market incident', 'ct-ord', 'Homicide', 'u-p2', 25, 'In court', 'Urgent', 'Public Prosecutor v. A. Bero'],
+    ['Livestock theft – 14 cattle, Dimeka', 'ct-ord', 'Theft & robbery', 'u-p2', -12, 'Charge filed', 'High', 'Public Prosecutor v. K. Lale and 2 others'],
+    ['Domestic violence appeal – Jinka kebele 02', 'ct-app', 'Gender-based violence', 'u-p1', -7, 'Under investigation', 'High', 'Public Prosecutor v. T. Mesele'],
+    ['Embezzlement of cooperative funds', 'ct-ord', 'Fraud & corruption', 'u-p1', 50, 'Under investigation', 'Normal', 'Public Prosecutor v. Cooperative cashier'],
+    ['Boundary dispute appeal – South Ari', 'ct-app', 'Land & property', 'u-p1', 30, 'Adjourned', 'Normal', 'Ayele family v. Gebre family'],
+    ['Hit-and-run on Jinka–Key Afer road', 'ct-ord', 'Traffic offence', 'u-p1', -4, 'In court', 'High', 'Public Prosecutor v. Unknown driver'],
+    ['Juvenile theft case – Key Afer', 'ct-ord', 'Juvenile', 'u-p3', 4, 'Registered', 'Normal', 'Public Prosecutor v. Minor (sealed)'],
+    ['Assault appeal – Key Afer weekly market', 'ct-app', 'Assault', 'u-p3', 5, 'Charge filed', 'Normal', 'Public Prosecutor v. B. Ayke'],
+    ['Robbery of mobile money agent – cassation', 'ct-cas', 'Theft & robbery', 'u-p3', -6, 'Under investigation', 'Urgent', 'Public Prosecutor v. Unknown'],
+    ['Forgery of land certificate', 'ct-ord', 'Fraud & corruption', 'u-p2', 65, 'Under investigation', 'Normal', 'Public Prosecutor v. M. Dore'],
+    ['Motorcycle theft – Jinka Town', 'ct-ord', 'Theft & robbery', 'u-p1', 20, 'Closed', 'Normal', 'Public Prosecutor v. S. Haile'],
+    ['Traffic collision – Weyto bridge', 'ct-ord', 'Traffic offence', 'u-p2', 5, 'Registered', 'Normal', 'Public Prosecutor v. Truck driver'],
+    ['Child labour exploitation report', 'ct-ord', 'Juvenile', 'u-p1', 24, 'Under investigation', 'High', 'Public Prosecutor v. Employer'],
+    ['Attempted homicide – Omorate (cassation)', 'ct-cas', 'Homicide', 'u-p3', 10, 'Judgment delivered', 'Urgent', 'Public Prosecutor v. L. Nakwa'],
+    ['Inheritance property appeal – Male', 'ct-app', 'Land & property', 'u-p2', -5, 'In court', 'Normal', 'Ergo family v. Shano family'],
+    ['Abduction complaint – Hamer', 'ct-ord', 'Gender-based violence', 'u-p2', 30, 'Under investigation', 'Urgent', 'Public Prosecutor v. Unknown'],
+    ['Fraud appeal – Jinka cooperative union', 'ct-app', 'Fraud & corruption', 'u-p1', -20, 'Closed', 'Normal', 'Public Prosecutor v. Union treasurer'],
+    ['Cassation review – land expropriation', 'ct-cas', 'Land & property', 'u-p2', 22, 'Charge filed', 'Normal', 'Public Prosecutor v. Kebele administration'],
   ];
   const offices: Record<string, string> = { 'u-p1': 'Jinka Town', 'u-p2': 'Hamer', 'u-p3': 'Bena-Tsemay' };
-  const cases: Case[] = caseSpec.map(([title, cat, pros, d, status, priority, parties], i) => {
+  const cases: Case[] = caseSpec.map(([title, cat, subject, pros, left, status, priority, parties], i) => {
+    // Closed cases: 'left' is how many days before (+) or after (-) the SLA due date they were closed.
+    const closedDaysAgo = i === 16 ? 10 : 5;
+    const d = status === 'Closed' ? sla[cat] - left + closedDaysAgo : sla[cat] - left;
     const openedAt = ago(d, 8);
     const path: CaseStatus[] = status === 'Adjourned'
       ? ['Registered', 'Under investigation', 'Charge filed', 'In court', 'Adjourned']
@@ -116,21 +131,25 @@ export function seedData(now = Date.now()): WSData {
       by: k === 0 && i % 4 === 0 ? 'u-dir' : pros, at: ago(Math.max(0, d - k * Math.max(1, Math.floor(d / (path.length + 1)))), 10),
     }));
     return {
-      id: 'case-' + (i + 1), caseNo: `SOZ/${(i % 3 === 0 ? 'CR' : i % 3 === 1 ? 'PR' : 'GN')}/${String(140 + i).padStart(4, '0')}/${new Date(openedAt).getFullYear()}`,
-      title, categoryId: cat, prosecutorId: pros, createdBy: i % 4 === 0 ? 'u-dir' : pros, office: offices[pros], parties,
+      id: 'case-' + (i + 1), caseNo: `SOZ/${({ 'ct-ord': 'OR', 'ct-app': 'AP', 'ct-cas': 'CS' } as Record<string, string>)[cat]}/${String(140 + i).padStart(4, '0')}/${new Date(openedAt).getFullYear()}`,
+      title, categoryId: cat, subject, prosecutorId: pros, createdBy: i % 4 === 0 ? 'u-dir' : pros, office: offices[pros], parties,
       description: 'Sample case record for demonstration. Facts summarised for the case register; no real personal data.',
-      priority, openedAt, dueAt: addDays(openedAt, sla[cat]), status, closedAt: status === 'Closed' ? ago(5) : undefined, updatedAt: statusChanges[statusChanges.length - 1].at,
+      priority, openedAt, dueAt: addDays(openedAt, sla[cat]), status, closedAt: status === 'Closed' ? ago(closedDaysAgo) : undefined, updatedAt: statusChanges[statusChanges.length - 1].at,
     };
   });
 
   const comments: WSData['comments'] = [
     { id: 'cm-1', caseId: 'case-3', by: 'u-dir', body: 'Please prioritise the medical report and victim protection measures. Update me before the SLA date.', at: ago(10) },
     { id: 'cm-2', caseId: 'case-3', by: 'u-p1', body: 'Medical report requested from Jinka hospital; expected this week.', at: ago(9) },
-    { id: 'cm-3', caseId: 'case-9', by: 'u-dir', body: 'This case is overdue. Explain the delay and submit an extension request with justification.', at: ago(3) },
+    { id: 'cm-3', caseId: 'case-9', by: 'u-dir', body: 'This case is overdue. Come to the office and explain the delay before I give permission.', at: ago(4) },
+    { id: 'cm-3b', caseId: 'case-9', by: 'u-p3', body: 'Visited the office today. The forensic report from Hawassa arrived late; requesting permission to continue.', at: ago(3) },
     { id: 'cm-4', caseId: 'case-1', by: 'u-dir', body: 'Good progress. Coordinate witness protection for the next hearing.', at: ago(6) },
     { id: 'cm-5', caseId: 'case-2', by: 'u-dir', body: 'Confirm that seized cattle were returned to owners and documented.', at: ago(4) },
   ];
-  const extensions: WSData['extensions'] = [];
+  // Permission given by the Office Head after the prosecutor came to the office. The case stays overdue in KPIs.
+  const c9 = cases[8];
+  c9.permitUntil = addDays(ago(2), 14);
+  const extensions: WSData['extensions'] = [{ id: 'ex-1', caseId: c9.id, by: 'u-dir', days: 14, reason: 'Prosecutor came to the office: forensic report delayed. Permission to continue; case remains overdue in KPIs.', at: ago(2, 11), oldDue: c9.dueAt, newDue: c9.permitUntil }];
 
   const preports: WSData['preports'] = [];
   const fb: WSData['feedback'] = [];
@@ -160,7 +179,7 @@ export function seedData(now = Date.now()): WSData {
     { id: 'n-0', userId: 'u-lib', text: 'Mekdes Alemayehu uploaded a Telebirr receipt for review.', link: '/dashboard/library/approvals', at: ago(1, 10), read: false },
     { id: 'n-1', userId: 'u-lib', text: 'Lidya Haile uploaded a Telebirr receipt for review.', link: '/dashboard/library/approvals', at: ago(2), read: false },
     { id: 'n-2', userId: 'u-lib', text: 'Dr. Yonas Bekele submitted a contribution: “Public Legal Awareness in Pastoralist Communities”.', link: '/dashboard/library/approvals', at: ago(3), read: false },
-    { id: 'n-3', userId: 'u-p1', text: 'Director commented on SOZ/PR/0142 (Domestic violence complaint).', link: '/dashboard/cases/case-3', at: ago(10), read: false },
+    { id: 'n-3', userId: 'u-p1', text: 'Office Head commented on SOZ/AP/0142 (Domestic violence appeal).', link: '/dashboard/cases/case-3', at: ago(10), read: false },
     { id: 'n-4', userId: 'u-p1', text: 'Feedback received on your weekly report.', link: '/dashboard/periodic-reports', at: ago(2), read: false },
     { id: 'n-5', userId: 'u-dir', text: 'Several cases are past their SLA due date and need your review.', link: '/dashboard/cases?filter=overdue', at: ago(1), read: false },
     { id: 'n-6', userId: 'u-dir', text: 'Dawit Alemu submitted a weekly report.', link: '/dashboard/periodic-reports', at: ago(4), read: false },
@@ -171,7 +190,7 @@ export function seedData(now = Date.now()): WSData {
 
   const audit: WSData['audit'] = [
     ['u-super', 'Seeded demonstration data', 30], ['u-lib', 'Approved payment TB8K2LQ91X for Dr. Yonas Bekele', 88], ['u-dir', 'Updated SLA for Gender-based violence to 45 days', 60],
-    ['u-dir', 'Created case SOZ/CR/0140/… and assigned to Dawit Alemu', 95], ['u-p1', 'Updated status of SOZ/PR/0142 to Under investigation', 40],
+    ['u-dir', 'Created case SOZ/OR/0140/… and assigned to Dawit Alemu', 95], ['u-p1', 'Updated status of SOZ/AP/0142 to Under investigation', 40],
     ['u-r2', 'Submitted Telebirr receipt TB9P4MZ27Q', 2], ['u-r1', 'Submitted contribution “Public Legal Awareness in Pastoralist Communities”', 3], ['u-dir', 'Gave feedback on weekly report of Hana Girma', 2],
   ].map(([by, action, d], i) => ({ id: 'a-' + i, by: by as string, action: action as string, at: ago(d as number, 12) })).sort((a, b) => b.at.localeCompare(a.at));
 
@@ -241,7 +260,7 @@ export function seedData(now = Date.now()): WSData {
   const cdoc = (caseId: string, docType: WSData['caseDocs'][number]['docType'], title: string, url: string, by: string, d: number, extra: WSData['caseDocs'][number]['versions'] = []) =>
     caseDocs.push({ id: 'cd-' + (caseDocs.length + 1), caseId, docType, title, versions: [{ v: 1, url, fileName: url.split('/').pop()!, size: 2400, by, at: ago(d), note: 'Initial upload' }, ...extra] });
   cdoc('case-1', 'Police investigation file', 'Police investigation file – Turmi', '/samples/administrative-justice.pdf', 'u-p2', 90);
-  cdoc('case-1', 'Charge sheet', 'Charge sheet', '/samples/crime-prevention.pdf', 'u-p2', 70, [{ v: 2, url: '/samples/crime-prevention.pdf', fileName: 'charge-sheet-v2.pdf', size: 2500, by: 'u-p2', at: ago(60), note: 'Corrected article numbers after Director review' }]);
+  cdoc('case-1', 'Charge sheet', 'Charge sheet', '/samples/crime-prevention.pdf', 'u-p2', 70, [{ v: 2, url: '/samples/crime-prevention.pdf', fileName: 'charge-sheet-v2.pdf', size: 2500, by: 'u-p2', at: ago(60), note: 'Corrected article numbers after Office Head review' }]);
   cdoc('case-1', 'Evidence list', 'Evidence list', '/samples/information-request.pdf', 'u-p2', 65);
   cdoc('case-3', 'Police investigation file', 'Police file – Jinka kebele 02', '/samples/administrative-justice.pdf', 'u-p1', 50);
   cdoc('case-3', 'Witness statement', 'Statement of neighbour (sealed)', '/samples/legal-awareness.pdf', 'u-p1', 40);

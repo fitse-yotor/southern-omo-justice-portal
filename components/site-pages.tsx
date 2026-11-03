@@ -42,14 +42,14 @@ export function SitePage({ kind, t }: { kind: string; t: T }) {
     </>;
     case 'prosecution': return <ServicePage t={t} icon={<Gavel />} title={t('Public prosecution', 'የዐቃቤ ሕግ አገልግሎት')} intro="Public prosecutors handle criminal cases from investigation to judgment, within service level agreements set for each case category."
       steps={['Police investigation file is received and registered.', 'Prosecutor reviews evidence and decides to charge or close.', 'Charge is filed and the case is followed in court.', 'Judgment, appeal and closure are recorded.']}
-      extra={<p>Prosecutors report daily, weekly and monthly to the Director. Staff can <Link href="/dashboard/login">sign in to the prosecution portal</Link>.</p>} />;
+      extra={<p>Prosecutors report daily, weekly and monthly to the Office Head. Staff can <Link href="/dashboard/login">sign in to the prosecution portal</Link>.</p>} />;
     case 'legal-aid': return <ServicePage t={t} icon={<HandHeart />} title={t('Free legal aid', 'ነጻ የሕግ ድጋፍ')} intro="Free legal advice and representation for people who cannot afford a lawyer, with priority for women, children, elderly people and persons with disabilities."
       steps={['Visit the zone office or your woreda justice office.', 'Explain your case and bring available documents.', 'An officer assesses eligibility.', 'You receive advice, document drafting or referral to representation.']} />;
     case 'advocates': return <ServicePage t={t} icon={<Briefcase />} title={t('Advocates licensing', 'የጥብቅና ፈቃድ')} intro="Registration, licensing and annual renewal for advocates practising before zone and woreda courts."
       steps={['Prepare your LLB/degree, ID, photos and experience letters.', 'Submit the application form to the zone office.', 'Sit the qualification exam where required.', 'Pay the fee and collect the licence. Renew annually.']} />;
     case 'press-releases': return <Listing t={t} title={t('Press releases', 'ጋዜጣዊ መግለጫ')} intro="Official statements from the department." icon={<Megaphone />} items={[
       ['Department launches digital library for researchers', 'The new digital library gives researchers access to laws, manuals and research after a simple Telebirr payment.', 3],
-      ['Prosecution portal introduces SLA monitoring', 'Each case category now has a service level agreement monitored by the Director.', 12],
+      ['Prosecution portal introduces SLA monitoring', 'Each case category now has a service level agreement monitored by the Office Head.', 12],
       ['Legal awareness campaign reaches Hamer and Dasenech', 'Community dialogue sessions held in partnership with elders and woreda offices.', 30],
     ]} />;
     case 'vacancies': return <Listing t={t} title={t('Vacancies', 'ክፍት የስራ ቦታ')} intro="Open positions at the zone department and woreda offices." icon={<Users />} items={[

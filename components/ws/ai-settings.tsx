@@ -62,12 +62,12 @@ export function AiSettingsPanel() {
   };
 
   return <Panel className="ai-settings" title={<><Sparkles size={18} />AI summaries</>} actions={<span className="ai-set-status">{v.enabled && v.keyStatus[v.provider].source !== 'none' || (v.enabled && !v.providers[v.provider].keyRequired) ? <Pill tone="green">On · {v.providers[v.provider].label}</Pill> : <Pill tone="grey">Off</Pill>}<Pill tone="blue">{v.usageToday} / {v.dailyLimit || '∞'} today</Pill></span>}>
-    <p className="ws-sub">Summaries of prosecutor reports for the Director. Names, case numbers, phone numbers and emails are always removed before text is sent to the AI service.</p>
+    <p className="ws-sub">Summaries of prosecutor reports for the Office Head. Names, case numbers, phone numbers and emails are always removed before text is sent to the AI service.</p>
 
     {v.storage === 'temporary' && <div className="ws-banner warn"><TriangleAlert /><div><b>Settings storage is temporary on this hosting</b><p>On Vercel, settings saved here can be lost when the server restarts. For permanent storage add a free Upstash Redis database (<code>UPSTASH_REDIS_REST_URL</code>, <code>UPSTASH_REDIS_REST_TOKEN</code>) or set the keys as environment variables.</p></div></div>}
     {!v.canSave && <div className="ws-banner bad"><ShieldCheck /><div><b>Saving is locked</b><p>Set <code>AI_ADMIN_PASSWORD</code> in the hosting environment (e.g. Vercel → Settings → Environment Variables) to allow changes from this page.</p></div></div>}
 
-    <label className="ws-check ai-enable"><input type="checkbox" checked={form.enabled} onChange={e => set('enabled', e.target.checked)} />Enable AI summaries for the Director</label>
+    <label className="ws-check ai-enable"><input type="checkbox" checked={form.enabled} onChange={e => set('enabled', e.target.checked)} />Enable AI summaries for the Office Head</label>
 
     <div className="ai-providers" role="radiogroup" aria-label="AI provider">
       {(Object.keys(v.providers) as ProviderId[]).map(p => <button type="button" role="radio" aria-checked={form.provider === p} key={p} onClick={() => { setForm({ ...form, provider: p, model: p === v.provider ? v.model : '', baseUrl: p === v.provider ? v.baseUrl : '' }); setNewKey(''); setRemoveKey(false); setTest(null); }}>
