@@ -15,11 +15,14 @@ export const MENU: Menu[] = [
     { href: '/powers-duties', en: 'Powers & duties', am: 'ስልጣንና ተግባር' },
     { href: '/structure', en: 'Organizational structure', am: 'መዋቅር' },
     { href: '/leadership', en: 'Leadership', am: 'አመራር' },
-    { href: '/offices', en: 'Woreda offices', am: 'የወረዳ ጽ/ቤቶች' },
+    { href: '/find-office', en: 'Woreda offices (map)', am: 'የወረዳ ጽ/ቤቶች (ካርታ)' },
+    { href: '/statistics', en: 'Justice in numbers', am: 'ፍትሕ በቁጥር' },
   ] },
   { href: '/services', en: 'Services', am: 'አገልግሎቶች', children: [
     { href: '/prosecution', en: 'Public prosecution', am: 'የዐቃቤ ሕግ አገልግሎት' },
     { href: '/legal-aid', en: 'Free legal aid', am: 'ነጻ የሕግ ድጋፍ' },
+    { href: '/book-appointment', en: 'Book legal aid appointment', am: 'የሕግ ድጋፍ ቀጠሮ' },
+    { href: '/know-your-rights', en: 'Know your rights', am: 'መብትዎን ይወቁ' },
     { href: '/advocates', en: 'Advocates licensing', am: 'የጥብቅና ፈቃድ' },
     { href: '/complaint', en: 'Complaint handling', am: 'ቅሬታ አቀራረብ' },
     { href: '/customary-justice', en: 'Customary justice', am: 'ባህላዊ ፍትሕ' },
@@ -43,6 +46,7 @@ export const MENU: Menu[] = [
     { href: '/press-releases', en: 'Press releases', am: 'ጋዜጣዊ መግለጫ' },
     { href: '/gallery', en: 'Photo gallery', am: 'ፎቶዎች' },
     { href: '/videos', en: 'Videos', am: 'ቪዲዮዎች' },
+    { href: '/events', en: 'Events & hearings calendar', am: 'የዝግጅቶች ቀን መቁጠሪያ' },
   ] },
   { href: '/publications', en: 'Publications', am: 'ህትመቶች', children: [
     { href: '/publications', en: 'Reports & research', am: 'ሪፖርቶችና ጥናቶች' },
@@ -51,6 +55,8 @@ export const MENU: Menu[] = [
   ] },
   { href: '/contact', en: 'Contact', am: 'ያግኙን', children: [
     { href: '/contact', en: 'Contact us', am: 'ያግኙን' },
+    { href: '/find-office', en: 'Find my office', am: 'ቢሮዬን ፈልግ' },
+    { href: '/feedback', en: 'Rate our service', am: 'አገልግሎታችንን ይገምግሙ' },
     { href: '/faq', en: 'FAQ', am: 'ተደጋጋሚ ጥያቄዎች' },
   ] },
 ];

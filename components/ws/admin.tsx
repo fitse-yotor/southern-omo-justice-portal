@@ -5,6 +5,7 @@ import { Bell, CheckCheck, KeyRound, Pencil, Plus, Save, Search, ShieldCheck, Tr
 import { toast } from 'sonner';
 import { useWS } from '@/lib/ws/store';
 import { AiSettingsPanel } from './ai-settings';
+import { PrefsPanels } from './system';
 import { OFFICES, PERMISSIONS, type Permission, type Role, type User } from '@/lib/ws/types';
 import { Avatar, DataTable, Empty, F, Modal, PageHead, Panel, Pill, Sel, StatusPill, ago, fmtDate, fmtDateTime } from './ui';
 
@@ -154,6 +155,8 @@ export function ProfilePage() {
           <button className="ws-btn"><KeyRound size={16} />Change password</button>
         </form>
       </Panel>
+      {user!.roleId === 'researcher' && <ResearcherFields />}
+      <PrefsPanels />
       <Panel title="My permissions"><ul className="ws-perm-list">{PERMISSIONS.filter(x => role?.permissions.includes(x.key)).map(x => <li key={x.key}><ShieldCheck size={14} />{x.label}</li>)}</ul></Panel>
       <Panel title="My recent activity"><ul className="ws-feed">{data.audit.filter(a => a.by === user!.id).slice(0, 8).map(a => <li key={a.id}><span className="dot" /><div>{a.action}<small>{ago(a.at)}</small></div></li>)}</ul></Panel>
     </div>
@@ -168,4 +171,16 @@ export function NotificationsPage() {
     <PageHead eyebrow="MY ACCOUNT" title="Notifications" actions={list.some(n => !n.read) ? <button className="ws-btn ghost" onClick={() => actions.markRead()}><CheckCheck size={16} />Mark all read</button> : undefined} />
     <Panel>{list.length ? <ul className="ws-notes">{list.map(n => <li key={n.id} className={n.read ? '' : 'unread'}><Bell size={18} /><Link href={n.link} onClick={() => actions.markRead(n.id)}>{n.text}<small>{fmtDateTime(n.at)} · {ago(n.at)}</small></Link></li>)}</ul> : <Empty title="You are all caught up" icon={<Bell size={30} />} />}</Panel>
   </>;
+}
+
+function ResearcherFields() {
+  const { user, actions } = useWS();
+  const [f, setF] = useState({ researchArea: user!.researchArea || '', bio: user!.bio || '' });
+  return <Panel title="Public researcher profile" actions={<Link className="ws-link" href={'/dashboard/researchers/' + user!.id}>View profile</Link>}>
+    <form className="ws-form" onSubmit={e => { e.preventDefault(); actions.updateProfileExtra(f); toast.success('Profile updated'); }}>
+      <F label="Research area"><input className="ws-input" value={f.researchArea} onChange={e => setF({ ...f, researchArea: e.target.value })} placeholder="e.g. Customary law, juvenile justice" /></F>
+      <F label="Short bio"><textarea className="ws-input" rows={3} value={f.bio} onChange={e => setF({ ...f, bio: e.target.value })} /></F>
+      <button className="ws-btn"><Save size={16} />Save</button>
+    </form>
+  </Panel>;
 }

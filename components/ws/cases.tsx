@@ -8,6 +8,7 @@ import { daysLeft, isOverdue, slaState, useWS } from '@/lib/ws/store';
 import { CASE_STATUSES, OFFICES, type Case, type CaseStatus } from '@/lib/ws/types';
 import { Avatar, DataTable, Empty, F, PageHead, Panel, Pill, Sel, SlaPill, StatusPill, ago, fmtDate, fmtDateTime } from './ui';
 import { useQueryParam } from './library';
+import { CaseDocuments, CaseHearings } from './prosecution-extra';
 
 export function CaseList() {
   const { data, user, can, userName } = useWS();
@@ -130,6 +131,7 @@ export function CaseDetail({ id }: { id: string }) {
               <button className="ws-btn"><Save size={16} />Save status</button>
             </form>}
         </Panel>}
+        <CaseDocuments c={c} />
         <Panel title={<><MessageSquare size={18} />Director comments</>}>
           {comments.length ? <ul className="ws-comments">{comments.map(m => <li key={m.id} className={m.by === user!.id ? 'mine' : ''}><Avatar name={userName(m.by)} size={30} /><div><b>{userName(m.by)}</b><small>{data.roles.find(r => r.id === data.users.find(u => u.id === m.by)?.roleId)?.name} · {fmtDateTime(m.at)}</small><p>{m.body}</p></div></li>)}</ul> : <Empty title="No comments yet" />}
           {canComment && <form className="ws-comment-box" onSubmit={e => { e.preventDefault(); if (!comment.trim()) return; actions.addComment(id, comment.trim()); setComment(''); toast.success('Comment added'); }}>
@@ -153,6 +155,7 @@ export function CaseDetail({ id }: { id: string }) {
             <div className="ws-inline"><Sel value={reassign} onChange={setReassign} options={data.users.filter(u => u.roleId === 'prosecutor' && u.status === 'active').map(u => [u.id, u.name] as [string, string])} /><button className="ws-btn sm ghost" disabled={reassign === c.prosecutorId}><UserRoundCog size={15} />Assign</button></div>
           </form>}
         </Panel>
+        <CaseHearings c={c} />
         <Panel title={<><History size={18} />Status history</>}>
           <ol className="ws-timeline">{timeline.map((t, i) => <li key={i} className={t.kind}><b>{t.title}</b><p>{t.body}</p><small>{userName(t.by)} · {fmtDateTime(t.at)}</small></li>)}</ol>
         </Panel>

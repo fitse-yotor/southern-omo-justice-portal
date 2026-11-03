@@ -4,7 +4,8 @@ export type Permission =
   | 'cases.create' | 'cases.viewAll' | 'cases.viewOwn' | 'cases.update' | 'cases.comment' | 'cases.extend' | 'sla.manage'
   | 'preports.submit' | 'preports.review'
   | 'cms.access'
-  | 'reports.system' | 'reports.library' | 'reports.cases' | 'reports.own';
+  | 'reports.system' | 'reports.library' | 'reports.cases' | 'reports.own'
+  | 'appointments.manage' | 'events.manage';
 
 export type Role = { id: string; name: string; description: string; permissions: Permission[]; system?: boolean };
 
@@ -12,13 +13,15 @@ export type UserStatus = 'active' | 'inactive';
 export type User = {
   id: string; name: string; email: string; password: string; phone: string; roleId: string;
   office: string; status: UserStatus; createdAt: string; institution?: string; purpose?: string; lastLogin?: string;
+  researchArea?: string; bio?: string; prefs?: UserPrefs;
 };
 
 export type LibCategory = { id: string; name: string; parentId: string | null; description: string };
 export type DocType = 'pdf' | 'word' | 'video';
 export type LibDoc = {
   id: string; title: string; description: string; categoryId: string; type: DocType; url: string; fileName: string;
-  size: number; visibility: 'public' | 'researchers'; status: 'published' | 'pending' | 'rejected';
+  size: number; visibility: 'public' | 'researchers'; status: 'published' | 'pending' | 'rejected' | 'changes_requested';
+  keywords?: string[]; text?: string; version?: number;
   uploadedBy: string; source: 'admin' | 'researcher'; author: string; year: string; reviewNote?: string;
   reviewedBy?: string; createdAt: string; publishedAt?: string; views: number; downloads: number;
 };
@@ -50,10 +53,25 @@ export type Notification = { id: string; userId: string; text: string; link: str
 export type Audit = { id: string; by: string; action: string; at: string };
 export type Settings = { libraryFee: number; telebirrCode: string; telebirrName: string; accessDays: number; dueSoonDays: number; orgName: string };
 
+export type NotifyChannel = { app: boolean; email: boolean; sms: boolean };
+export const NOTIFY_EVENTS = ['Case assigned or updated', 'SLA due soon / overdue', 'Director comments & feedback', 'Hearing reminders', 'Library approvals', 'Report reminders'] as const;
+export type UserPrefs = { lang: 'en' | 'am'; theme: 'light' | 'dark'; textSize: 100 | 112 | 125; notify: Record<string, NotifyChannel> };
+
+export type Appointment = { id: string; code: string; name: string; phone: string; office: string; date: string; time: string; issue: string; details: string; status: 'booked' | 'confirmed' | 'completed' | 'cancelled'; createdAt: string; staffNote?: string };
+export type Rating = { id: string; service: string; office: string; stars: number; comment: string; at: string };
+export type PublicEvent = { id: string; title: string; type: 'Legal awareness' | 'Public hearing' | 'Community dialogue' | 'Training'; date: string; time: string; place: string; office: string; description: string };
+export type Hearing = { id: string; caseId: string; date: string; time: string; court: string; purpose: string; outcome?: string; createdBy: string };
+export type CaseDocVersion = { v: number; url: string; fileName: string; size: number; by: string; at: string; note: string };
+export type CaseDoc = { id: string; caseId: string; docType: 'Police investigation file' | 'Charge sheet' | 'Evidence list' | 'Witness statement' | 'Court order' | 'Judgment' | 'Other'; title: string; versions: CaseDocVersion[] };
+export type Task = { id: string; userId: string; title: string; due?: string; done: boolean; createdAt: string };
+export type ReviewComment = { id: string; docId: string; by: string; body: string; at: string };
+
 export type WSData = {
   version: number; roles: Role[]; users: User[]; categories: LibCategory[]; docs: LibDoc[]; payments: Payment[];
   caseCategories: CaseCategory[]; cases: Case[]; statusChanges: StatusChange[]; comments: CaseComment[]; extensions: Extension[];
   preports: PReport[]; feedback: Feedback[]; notifications: Notification[]; audit: Audit[]; settings: Settings;
+  appointments: Appointment[]; ratings: Rating[]; events: PublicEvent[]; hearings: Hearing[]; caseDocs: CaseDoc[]; tasks: Task[]; reviewComments: ReviewComment[];
+  lastBackupAt?: string;
 };
 
 export const CASE_STATUSES: CaseStatus[] = ['Registered', 'Under investigation', 'Charge filed', 'In court', 'Adjourned', 'Judgment delivered', 'Closed'];
@@ -65,6 +83,8 @@ export const PERMISSIONS: { key: Permission; label: string; group: string }[] = 
   { key: 'settings.manage', label: 'System settings', group: 'Administration' },
   { key: 'audit.view', label: 'View audit log', group: 'Administration' },
   { key: 'cms.access', label: 'Website content & complaints', group: 'Administration' },
+  { key: 'appointments.manage', label: 'Manage legal aid appointments', group: 'Administration' },
+  { key: 'events.manage', label: 'Manage public events & ratings', group: 'Administration' },
   { key: 'library.view', label: 'Access full digital library', group: 'Digital library' },
   { key: 'library.manage', label: 'Upload & organize documents', group: 'Digital library' },
   { key: 'library.approve', label: 'Approve payments & contributions', group: 'Digital library' },

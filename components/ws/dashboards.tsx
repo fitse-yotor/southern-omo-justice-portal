@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, BookOpen, Briefcase, CheckCircle2, ClipboardList, Clock, FileCheck2, Globe, Lock, MessageSquare, Users, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarDays, BookOpen, Briefcase, CheckCircle2, ClipboardList, Clock, FileCheck2, Globe, Lock, MessageSquare, Users, Wallet } from 'lucide-react';
 import { isOverdue, slaState, useWS } from '@/lib/ws/store';
 import { CASE_STATUSES } from '@/lib/ws/types';
 import { Bars, DocIcon, Empty, PageHead, Panel, Pill, SlaPill, Stat, ago, fmtDate } from './ui';
@@ -59,6 +59,7 @@ export function Dashboard() {
     </div>
 
     {isResearcher && <ResearcherAccess />}
+    {(director || prosecutor) && <HearingReminder />}
 
     <div className="ws-dash-grid">
       {(director || superAdmin) && <Panel title="Cases by status" actions={<Link className="ws-link" href="/dashboard/reports">Reports <ArrowRight size={14} /></Link>}>
@@ -107,6 +108,10 @@ export function Dashboard() {
         <ul className="ws-list">{data.docs.filter(d => d.status === 'published').sort((a, b) => (b.publishedAt || '').localeCompare(a.publishedAt || '')).slice(0, 5).map(d => <li key={d.id}><Link href={'/dashboard/library?doc=' + d.id}><DocIcon type={d.type} /><div><b>{d.title}</b><small>{data.categories.find(c => c.id === d.categoryId)?.name} · {fmtDate(d.publishedAt)}</small></div>{d.visibility === 'researchers' && <Pill tone="teal">Researchers</Pill>}</Link></li>)}</ul>
       </Panel>}
 
+      {director && data.ratings.length > 0 && <Panel title="Citizen satisfaction" actions={can('events.manage') ? <Link className="ws-link" href="/dashboard/events">Details <ArrowRight size={14} /></Link> : undefined}>
+        <div className="sat-head"><strong>{(data.ratings.reduce((s, r) => s + r.stars, 0) / data.ratings.length).toFixed(1)}</strong><span>/ 5 from {data.ratings.length} ratings</span></div>
+        <Bars data={[5, 4, 3, 2, 1].map(n => ({ label: '★'.repeat(n), value: data.ratings.filter(r => r.stars === n).length }))} />
+      </Panel>}
       {superAdmin && <Panel title="Users by role" actions={<Link className="ws-link" href="/dashboard/users">Manage <ArrowRight size={14} /></Link>}>
         <Bars data={data.roles.map(r => ({ label: r.name, value: data.users.filter(u => u.roleId === r.id).length }))} />
       </Panel>}
@@ -149,3 +154,12 @@ function ResearcherAccess() {
   return <div className="ws-banner"><Wallet /><div><b>{pay?.status === 'rejected' ? 'Payment rejected — please resubmit' : 'Unlock the full digital library'}</b><p>{pay?.status === 'rejected' ? pay.note : `Pay ${data.settings.libraryFee} ETB with Telebirr and upload your receipt. Public documents remain available meanwhile.`}</p></div><Link className="ws-btn sm" href="/dashboard/library/access">Pay & upload receipt</Link></div>;
 }
 
+
+function HearingReminder() {
+  const { data, user, can } = useWS();
+  const today = new Date().toISOString().slice(0, 10), tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const mine = can('cases.viewAll') ? data.cases : data.cases.filter(c => c.prosecutorId === user!.id);
+  const soon = data.hearings.filter(h => (h.date === today || h.date === tomorrow) && mine.some(c => c.id === h.caseId)).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  if (!soon.length) return null;
+  return <div className="ws-banner"><CalendarDays /><div><b>{soon.length} hearing{soon.length > 1 ? 's' : ''} today or tomorrow</b><p>{soon.slice(0, 3).map(h => `${h.date === today ? 'Today' : 'Tomorrow'} ${h.time} · ${data.cases.find(c => c.id === h.caseId)?.title} · ${h.court}`).join('  |  ')}</p></div><Link className="ws-btn sm" href="/dashboard/calendar">Open calendar</Link></div>;
+}

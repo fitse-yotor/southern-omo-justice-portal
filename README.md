@@ -21,6 +21,14 @@ New staff/researcher workspace at **`/dashboard`** (sign in at `/dashboard/login
 - **Role-based reports** exported to **PDF and CSV**.
 - **Public menu** restructured after justice.gov.et (About Us, Services, Laws, Digital Library, Media, Publications, Contact) with new pages: mission & vision, powers & duties, prosecution, legal aid, advocates, press releases, videos, publications, vacancies, tenders.
 
+### November 2026 – features 1–24
+- **Public site:** Justice in numbers (`/statistics`), legal aid booking (`/book-appointment`), office map (`/find-office`), Know your rights guides in English/Amharic (`/know-your-rights`), events & hearings calendar (`/events`), service rating (`/feedback`).
+- **Prosecutors:** hearing calendar with reminders, case documents with version history, hearings on each case, My tasks (automatic + to-do), report pre-fill from case activity.
+- **Director:** performance charts, drag-and-drop workload balancing, case map, printable weekly digest with AI summary, citizen satisfaction.
+- **Library:** document detail page with citation (APA/Chicago) and related documents, search by keywords/text/year/author, researcher profiles, review comments with "request changes" and resubmission.
+- **Everyone:** Ctrl+K global search, Amharic interface (draft translation), dark mode and text size, notification preferences, installable app (PWA) that opens offline.
+- **Admin:** legal aid appointments and events/ratings management, system health with backup download/restore.
+
 Code: `lib/ws/*` (types, seed data, store, reports/export), `components/ws/*` (workspace pages), `components/site-nav.tsx`, `components/site-pages.tsx`, `app/workspace.css`.
 
 **Demo boundary:** data and uploaded files are stored in the visitor's browser (localStorage / IndexedDB) and permissions are enforced in the client. Production needs the backend from `docs/UPDATE_PLAN.md` (database, server-side auth/RBAC, object storage). Use “Reset demo data” in the workspace footer to restore the samples.

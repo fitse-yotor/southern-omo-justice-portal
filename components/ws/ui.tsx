@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { useFileUrl, fmtSize } from '@/lib/ws/files';
 import { PdfView } from './pdf-view';
 import { slaState, daysLeft, useWS } from '@/lib/ws/store';
+import { translate } from '@/lib/ws/i18n';
 import type { Case, LibDoc } from '@/lib/ws/types';
 
 export const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
@@ -16,18 +17,22 @@ export const ago = (iso: string) => {
   const d = Math.floor(s / 86400); return d === 1 ? 'yesterday' : d + ' days ago';
 };
 
+export function useTr() { const { prefs } = useWS(); return (s: string) => translate(prefs.lang, s); }
+const tx = (tr: (s: string) => string, n: React.ReactNode) => (typeof n === 'string' ? tr(n) : n);
 export function PageHead({ title, eyebrow, children, actions }: { title: string; eyebrow?: string; children?: React.ReactNode; actions?: React.ReactNode }) {
-  return <div className="ws-head"><div>{eyebrow && <div className="ws-eyebrow">{eyebrow}</div>}<h1>{title}</h1>{children && <p>{children}</p>}</div>{actions && <div className="ws-head-actions">{actions}</div>}</div>;
+  const tr = useTr();
+  return <div className="ws-head"><div>{eyebrow && <div className="ws-eyebrow">{tr(eyebrow)}</div>}<h1>{tr(title)}</h1>{children && <p>{children}</p>}</div>{actions && <div className="ws-head-actions">{actions}</div>}</div>;
 }
 export function Stat({ label, value, tone, icon, href, hint }: { label: string; value: React.ReactNode; tone?: 'red' | 'gold' | 'teal' | 'ink'; icon?: React.ReactNode; href?: string; hint?: string }) {
-  const body = <>{icon && <span className="ws-stat-icon">{icon}</span>}<span className="ws-stat-label">{label}</span><strong>{value}</strong>{hint && <small>{hint}</small>}</>;
+  const tr = useTr();
+  const body = <>{icon && <span className="ws-stat-icon">{icon}</span>}<span className="ws-stat-label">{tr(label)}</span><strong>{value}</strong>{hint && <small>{hint}</small>}</>;
   return href ? <Link href={href} className={'ws-stat tone-' + (tone || 'teal')}>{body}</Link> : <div className={'ws-stat tone-' + (tone || 'teal')}>{body}</div>;
 }
 export function Pill({ children, tone = 'grey' }: { children: React.ReactNode; tone?: 'grey' | 'green' | 'red' | 'gold' | 'blue' | 'teal' }) {
   return <span className={'ws-pill pill-' + tone}>{children}</span>;
 }
 export function StatusPill({ status }: { status: string }) {
-  const tone = ({ Closed: 'grey', 'Judgment delivered': 'green', 'In court': 'blue', 'Charge filed': 'teal', Adjourned: 'gold', 'Under investigation': 'gold', Registered: 'grey', approved: 'green', published: 'green', active: 'green', pending: 'gold', Submitted: 'gold', Reviewed: 'green', rejected: 'red', inactive: 'red' } as Record<string, 'grey' | 'green' | 'red' | 'gold' | 'blue' | 'teal'>)[status] || 'grey';
+  const tone = ({ Closed: 'grey', 'Judgment delivered': 'green', 'In court': 'blue', 'Charge filed': 'teal', Adjourned: 'gold', 'Under investigation': 'gold', Registered: 'grey', approved: 'green', published: 'green', active: 'green', pending: 'gold', 'changes requested': 'blue', booked: 'gold', confirmed: 'blue', completed: 'green', cancelled: 'grey', Submitted: 'gold', Reviewed: 'green', rejected: 'red', inactive: 'red' } as Record<string, 'grey' | 'green' | 'red' | 'gold' | 'blue' | 'teal'>)[status] || 'grey';
   return <Pill tone={tone}>{status[0].toUpperCase() + status.slice(1)}</Pill>;
 }
 export function SlaPill({ c }: { c: Case }) {
@@ -39,13 +44,16 @@ export function SlaPill({ c }: { c: Case }) {
   return <Pill tone="green"><Clock size={13} />{d}d left</Pill>;
 }
 export function Empty({ title, children, icon }: { title: string; children?: React.ReactNode; icon?: React.ReactNode }) {
-  return <div className="ws-empty">{icon || <Inbox size={34} />}<h3>{title}</h3>{children && <p>{children}</p>}</div>;
+  const tr = useTr();
+  return <div className="ws-empty">{icon || <Inbox size={34} />}<h3>{tr(title)}</h3>{children && <p>{children}</p>}</div>;
 }
 export function Panel({ title, children, actions, className = '' }: { title?: React.ReactNode; children: React.ReactNode; actions?: React.ReactNode; className?: string }) {
-  return <section className={'ws-panel ' + className}>{(title || actions) && <div className="ws-panel-head">{title && <h2>{title}</h2>}{actions}</div>}{children}</section>;
+  const tr = useTr();
+  return <section className={'ws-panel ' + className}>{(title || actions) && <div className="ws-panel-head">{title && <h2>{tx(tr, title)}</h2>}{actions}</div>}{children}</section>;
 }
 export function F({ label, children, hint, wide }: { label: string; children: React.ReactNode; hint?: string; wide?: boolean }) {
-  return <label className={'ws-field' + (wide ? ' wide' : '')}><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
+  const tr = useTr();
+  return <label className={'ws-field' + (wide ? ' wide' : '')}><span>{tr(label)}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 export function Sel({ value, onChange, options, ...rest }: { value: string; onChange: (v: string) => void; options: (string | [string, string])[] } & Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange'>) {
   return <select className="ws-input" value={value} onChange={e => onChange(e.target.value)} {...rest}>{options.map(o => Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>)}</select>;

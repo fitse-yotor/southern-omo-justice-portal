@@ -3,6 +3,7 @@ import './justice.css';
 import './workspace.css';
 import {PortalProvider} from '@/components/justice-portal';
 import {WorkspaceProvider} from '@/lib/ws/store';
-export const metadata: Metadata = { title: 'South Omo Zone Justice Department', description: 'Access justice services, explore legal resources, and connect with the South Omo Zone Justice Department. Design preview.', icons: {icon:'/justice-logo.png',shortcut:'/justice-logo.png'} };
-export const viewport: Viewport = { width: 'device-width', initialScale: 1 };
-export default function RootLayout({children}:Readonly<{children:React.ReactNode}>){return <html lang="en"><body><WorkspaceProvider><PortalProvider>{children}</PortalProvider></WorkspaceProvider></body></html>}
+import PwaRegister from '@/components/pwa';
+export const metadata: Metadata = { title: 'South Omo Zone Justice Department', description: 'Access justice services, explore legal resources, and connect with the South Omo Zone Justice Department. Design preview.', manifest: '/manifest.webmanifest', icons: {icon:'/justice-logo.png',shortcut:'/justice-logo.png',apple:'/icon-192.png'}, appleWebApp: { capable: true, title: 'SO Justice', statusBarStyle: 'default' } };
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#1f5646' };
+export default function RootLayout({children}:Readonly<{children:React.ReactNode}>){return <html lang="en"><body><WorkspaceProvider><PortalProvider>{children}</PortalProvider></WorkspaceProvider><PwaRegister/></body></html>}

@@ -1,7 +1,7 @@
-import { CASE_STATUSES, PERMISSIONS, type Case, type CaseStatus, type Permission, type WSData } from './types';
+import { CASE_STATUSES, OFFICES as OFF_LIST, PERMISSIONS, type Case, type CaseStatus, type Permission, type WSData } from './types';
 
 const DAY = 86400000;
-export const SEED_VERSION = 5;
+export const SEED_VERSION = 6;
 
 export function seedData(now = Date.now()): WSData {
   const ago = (d: number, h = 9) => { const t = new Date(now - d * DAY); t.setHours(h, (d * 7) % 60, 0, 0); return t.toISOString(); };
@@ -15,8 +15,8 @@ export function seedData(now = Date.now()): WSData {
     { id: 'researcher', name: 'Researcher', description: 'Registered researcher. Pays the library fee, accesses the full library after approval and contributes research.', permissions: P('library.contribute', 'reports.own'), system: true },
     { id: 'director', name: 'Director', description: 'Oversees prosecution: creates and assigns cases, comments, sets SLAs and reviews prosecutor reports.', permissions: P('cases.create', 'cases.viewAll', 'cases.comment', 'cases.extend', 'cases.update', 'sla.manage', 'preports.review', 'reports.cases', 'library.view', 'reports.own'), system: true },
     { id: 'prosecutor', name: 'Prosecutor', description: 'Registers own cases, updates status within SLA and submits daily, weekly and monthly reports.', permissions: P('cases.create', 'cases.viewOwn', 'cases.update', 'preports.submit', 'library.view', 'reports.own'), system: true },
-    { id: 'content-editor', name: 'Content Editor', description: 'Manages public website news, notices, gallery and legal documents.', permissions: P('cms.access', 'reports.own'), system: true },
-    { id: 'complaint-officer', name: 'Complaint Officer', description: 'Handles citizen complaints received through the public portal.', permissions: P('cms.access', 'reports.own'), system: true },
+    { id: 'content-editor', name: 'Content Editor', description: 'Manages public website news, notices, events, gallery and legal documents.', permissions: P('cms.access', 'events.manage', 'reports.own'), system: true },
+    { id: 'complaint-officer', name: 'Complaint Officer', description: 'Handles citizen complaints, legal aid appointments and service feedback.', permissions: P('cms.access', 'appointments.manage', 'events.manage', 'reports.own'), system: true },
   ];
 
   const u = (id: string, name: string, email: string, roleId: string, office: string, d: number, extra: Partial<WSData['users'][number]> = {}) =>
@@ -28,8 +28,8 @@ export function seedData(now = Date.now()): WSData {
     u('u-p1', 'Hana Girma', 'prosecutor@southomo.gov.et', 'prosecutor', 'Jinka Town', 200),
     u('u-p2', 'Dawit Alemu', 'dawit.alemu@southomo.gov.et', 'prosecutor', 'Hamer', 190),
     u('u-p3', 'Selam Tadesse', 'selam.tadesse@southomo.gov.et', 'prosecutor', 'Bena-Tsemay', 150),
-    u('u-r1', 'Dr. Yonas Bekele', 'researcher@example.com', 'researcher', '—', 90, { institution: 'Jinka University', purpose: 'Customary law and formal justice research' }),
-    u('u-r2', 'Lidya Haile', 'lidya.haile@example.com', 'researcher', '—', 4, { institution: 'Arba Minch University', purpose: 'MA thesis on juvenile justice' }),
+    u('u-r1', 'Dr. Yonas Bekele', 'researcher@example.com', 'researcher', '—', 90, { institution: 'Jinka University', purpose: 'Customary law and formal justice research', researchArea: 'Legal pluralism, customary dispute resolution, juvenile justice', bio: 'Lecturer in law at Jinka University. Researches how elders\u2019 councils and woreda justice offices work together in South Omo.' }),
+    u('u-r2', 'Lidya Haile', 'lidya.haile@example.com', 'researcher', '—', 4, { institution: 'Arba Minch University', purpose: 'MA thesis on juvenile justice', researchArea: 'Juvenile justice' }),
     u('u-r3', 'Samuel Ayele', 'samuel.ayele@example.com', 'researcher', '—', 1, { institution: 'Independent researcher', purpose: 'Land dispute resolution study' }),
     u('u-r4', 'Mekdes Alemayehu', 'mekdes.alemayehu@example.com', 'researcher', '—', 2, { institution: 'Addis Ababa University', purpose: 'PhD research on pastoralist land rights' }),
     u('u-r5', 'Biruk Tesfaye', 'biruk.tesfaye@example.com', 'researcher', '—', 14, { institution: 'Wolaita Sodo University', purpose: 'Comparative study of legal aid services' }),
@@ -175,9 +175,96 @@ export function seedData(now = Date.now()): WSData {
     ['u-r2', 'Submitted Telebirr receipt TB9P4MZ27Q', 2], ['u-r1', 'Submitted contribution “Public Legal Awareness in Pastoralist Communities”', 3], ['u-dir', 'Gave feedback on weekly report of Hana Girma', 2],
   ].map(([by, action, d], i) => ({ id: 'a-' + i, by: by as string, action: action as string, at: ago(d as number, 12) })).sort((a, b) => b.at.localeCompare(a.at));
 
+
+  /* ---------- new feature data (v6) ---------- */
+  const ahead = (d: number, h = 9) => { const t = new Date(now + d * DAY); t.setHours(h, 0, 0, 0); return t.toISOString(); };
+  const dayStr = (iso: string) => iso.slice(0, 10);
+
+  // Keywords and text summaries for library search
+  const KW: Record<string, [string[], string]> = {
+    "Citizens' Charter": [['service standards', 'rights', 'complaints'], 'Sets service standards for the department: respectful treatment, clear information, response times and how to complain when a service is not delivered.'],
+    'Administrative Justice Guideline': [['administrative justice', 'complaints', 'procedure'], 'Explains how to record a concern, identify the responsible office, communicate progress and explain the outcome to the citizen.'],
+    'Crime Prevention Strategy': [['crime prevention', 'community policing', 'coordination'], 'Framework for community awareness, accessible reporting and coordination between police, prosecution, courts and kebele structures.'],
+    'Prosecution Practice Manual': [['prosecution', 'charging', 'court', 'reporting'], 'Case intake, evidence review, charging standards, court representation, adjournments and daily, weekly and monthly reporting duties of prosecutors.'],
+    'Legal Aid Service Guideline': [['legal aid', 'eligibility', 'referral'], 'Who qualifies for free legal aid, intake steps, priority groups (women, children, persons with disabilities) and referral to representation.'],
+    'Prosecution procedure orientation': [['training', 'prosecution', 'video'], 'Orientation video for new prosecutors covering case registration, SLA monitoring and reporting.'],
+    'Customary dispute resolution in South Omo': [['customary law', 'elders', 'reconciliation', 'video'], 'Awareness video on how elders\u2019 councils resolve disputes and when cases must go to formal justice institutions.'],
+    'Annual Performance Report 2025': [['annual report', 'performance', 'statistics'], 'Case handling figures, clearance rates, legal awareness campaigns and service delivery indicators for 2025.'],
+    'Complaint Form': [['form', 'complaint'], 'Printable form for submitting a complaint about a justice service.'],
+    'Information Request Form': [['form', 'information access'], 'Form to request access to public information held by the department.'],
+    'Customary Law and Formal Justice in South Omo': [['customary law', 'legal pluralism', 'Hamer', 'Dasenech', 'elders'], 'Interviews with elders, woreda justice officers and community members show referral pathways between customary institutions and formal courts, documentation gaps and ways to improve coordination.'],
+  };
+  docs.forEach(d => { const k = KW[d.title]; if (k) { d.keywords = k[0]; d.text = k[1]; } });
+  docs.push(doc('Women\u2019s Access to Justice in Hamer Woreda (draft)', 'c-research-cust', 'pdf', '/samples/legal-awareness.pdf', 2485, 'researchers', 6, { description: 'Draft study on barriers women face when reporting gender-based violence.', source: 'researcher', uploadedBy: 'u-r1', author: 'Dr. Yonas Bekele', status: 'changes_requested', publishedAt: undefined, reviewedBy: 'u-lib', reviewNote: 'Please add your interview method and anonymise the village names.', views: 0, downloads: 0, keywords: ['gender-based violence', 'women', 'Hamer'], text: 'Draft findings on distance to offices, language barriers and fear of stigma.' }));
+  const changesDoc = docs[docs.length - 1].id;
+  const reviewComments: WSData['reviewComments'] = [
+    { id: 'rc-1', docId: changesDoc, by: 'u-lib', body: 'Thank you – valuable topic. Please (1) describe your interview method and sample size, (2) anonymise the village names in section 3.', at: ago(4, 11) },
+    { id: 'rc-2', docId: changesDoc, by: 'u-r1', body: 'Thanks. I will add a methods section and replace village names with codes this week.', at: ago(3, 15) },
+  ];
+
+  const appointments: WSData['appointments'] = [
+    ['Almaz Desta', '+251 916 220 114', 'Jinka Town', 2, '09:00', 'Family / divorce', 'confirmed'],
+    ['Gelgelo Bura', '+251 917 330 225', 'Hamer', 3, '10:30', 'Land dispute', 'booked'],
+    ['Aster Kebede', '+251 918 440 336', 'Zone office (Jinka)', 1, '14:00', 'Gender-based violence', 'confirmed'],
+    ['Bona Lale', '+251 919 550 447', 'Bena-Tsemay', 6, '11:00', 'Labour / employment', 'booked'],
+    ['Meseret Ali', '+251 911 660 558', 'Jinka Town', -2, '09:30', 'Inheritance', 'completed'],
+    ['Kulo Arbe', '+251 912 770 669', 'Dasenech', -5, '15:00', 'Criminal case advice', 'completed'],
+    ['Sara Tesfu', '+251 913 880 770', 'South Ari', -1, '10:00', 'Family / divorce', 'cancelled'],
+    ['Dula Mena', '+251 914 990 881', 'Male', -9, '13:30', 'Land dispute', 'completed'],
+  ].map(([name, phone, office, d, time, issue, status], i) => ({ id: 'ap-' + (i + 1), code: 'LA-' + (4821 + i * 37), name: name as string, phone: phone as string, office: office as string, date: dayStr(d as number >= 0 ? ahead(d as number) : ago(-(d as number))), time: time as string, issue: issue as string, details: 'Sample appointment request (demonstration data).', status: status as WSData['appointments'][number]['status'], createdAt: ago(Math.abs(d as number) + 3) }));
+
+  const services = ['Legal aid', 'Complaint handling', 'Prosecution services', 'Information request'];
+  const ratings: WSData['ratings'] = Array.from({ length: 36 }, (_, i) => ({
+    id: 'rt-' + i, service: services[i % 4], office: OFF_LIST[i % OFF_LIST.length], stars: [5, 4, 5, 3, 4, 5, 2, 4, 5, 4, 3, 5][i % 12],
+    comment: ['Staff explained the next steps clearly.', 'Had to wait long but the officer was helpful.', '', 'Very respectful service.', 'Please add more staff on market days.', ''][i % 6], at: ago(i * 2 + 1, 12),
+  }));
+
+  const events: WSData['events'] = [
+    ['Legal awareness day: rights of women and children', 'Legal awareness', 4, '09:00', 'Jinka Town hall', 'Jinka Town'],
+    ['Public hearing: Turmi market incident (murder case)', 'Public hearing', 7, '08:30', 'Hamer woreda court', 'Hamer'],
+    ['Community dialogue with elders on customary justice', 'Community dialogue', 11, '10:00', 'Key Afer community centre', 'Bena-Tsemay'],
+    ['Paralegal training for kebele leaders', 'Training', 15, '09:00', 'Zone justice office, Jinka', 'Zone office (Jinka)'],
+    ['Mobile legal aid clinic – Omorate', 'Legal awareness', 20, '09:00', 'Omorate kebele office', 'Dasenech'],
+    ['Public hearing: inheritance property dispute', 'Public hearing', 2, '14:00', 'Male woreda court', 'Male'],
+    ['Legal awareness radio programme', 'Legal awareness', -3, '18:00', 'South Omo FM', 'Zone office (Jinka)'],
+    ['Workshop on juvenile justice', 'Training', -10, '09:00', 'Jinka University', 'Jinka Town'],
+  ].map(([title, type, d, time, place, office], i) => ({ id: 'ev-' + (i + 1), title: title as string, type: type as WSData['events'][number]['type'], date: dayStr((d as number) >= 0 ? ahead(d as number) : ago(-(d as number))), time: time as string, place: place as string, office: office as string, description: 'Open to the public. Sample event for demonstration.' }));
+
+  const courts: Record<string, string> = { 'Jinka Town': 'South Omo High Court, Jinka', Hamer: 'Hamer Woreda Court, Dimeka', 'Bena-Tsemay': 'Bena-Tsemay Woreda Court, Key Afer' };
+  const hearings: WSData['hearings'] = [];
+  cases.filter(c => ['Charge filed', 'In court', 'Adjourned', 'Judgment delivered'].includes(c.status)).forEach((c, i) => {
+    hearings.push({ id: `hr-${i}-a`, caseId: c.id, date: dayStr(ago(10 + i * 3)), time: '09:00', court: courts[c.office] || 'Woreda court', purpose: 'Plea hearing', outcome: i % 2 ? 'Adjourned – defence requested time' : 'Plea recorded; evidence hearing scheduled', createdBy: c.prosecutorId });
+    if (c.status !== 'Judgment delivered') hearings.push({ id: `hr-${i}-b`, caseId: c.id, date: dayStr(ahead([1, 3, 5, 8, 2, 12, 6][i % 7])), time: ['08:30', '10:00', '14:00'][i % 3], court: courts[c.office] || 'Woreda court', purpose: ['Evidence hearing', 'Witness examination', 'Defence hearing', 'Judgment'][i % 4], createdBy: c.prosecutorId });
+  });
+
+  const caseDocs: WSData['caseDocs'] = [];
+  const cdoc = (caseId: string, docType: WSData['caseDocs'][number]['docType'], title: string, url: string, by: string, d: number, extra: WSData['caseDocs'][number]['versions'] = []) =>
+    caseDocs.push({ id: 'cd-' + (caseDocs.length + 1), caseId, docType, title, versions: [{ v: 1, url, fileName: url.split('/').pop()!, size: 2400, by, at: ago(d), note: 'Initial upload' }, ...extra] });
+  cdoc('case-1', 'Police investigation file', 'Police investigation file – Turmi', '/samples/administrative-justice.pdf', 'u-p2', 90);
+  cdoc('case-1', 'Charge sheet', 'Charge sheet', '/samples/crime-prevention.pdf', 'u-p2', 70, [{ v: 2, url: '/samples/crime-prevention.pdf', fileName: 'charge-sheet-v2.pdf', size: 2500, by: 'u-p2', at: ago(60), note: 'Corrected article numbers after Director review' }]);
+  cdoc('case-1', 'Evidence list', 'Evidence list', '/samples/information-request.pdf', 'u-p2', 65);
+  cdoc('case-3', 'Police investigation file', 'Police file – Jinka kebele 02', '/samples/administrative-justice.pdf', 'u-p1', 50);
+  cdoc('case-3', 'Witness statement', 'Statement of neighbour (sealed)', '/samples/legal-awareness.pdf', 'u-p1', 40);
+  cdoc('case-6', 'Charge sheet', 'Charge sheet – hit-and-run', '/samples/crime-prevention.pdf', 'u-p1', 25);
+  cdoc('case-14', 'Judgment', 'Judgment of the court', '/samples/citizens-charter.pdf', 'u-p3', 4);
+
+  const tasks: WSData['tasks'] = [
+    { id: 'tk-1', userId: 'u-p1', title: 'Collect medical report from Jinka hospital', due: dayStr(ahead(1)), done: false, createdAt: ago(3) },
+    { id: 'tk-2', userId: 'u-p1', title: 'Prepare witness list for hit-and-run hearing', due: dayStr(ahead(4)), done: false, createdAt: ago(2) },
+    { id: 'tk-3', userId: 'u-p1', title: 'Call complainant in cooperative fraud case', done: true, createdAt: ago(6) },
+    { id: 'tk-4', userId: 'u-dir', title: 'Review SLA for land disputes with woreda heads', due: dayStr(ahead(6)), done: false, createdAt: ago(5) },
+  ];
+
+  audit.push(
+    { id: 'a-f1', by: 'system', action: 'Failed sign-in attempt for director@southomo.gov.et', at: ago(1, 7) },
+    { id: 'a-f2', by: 'system', action: 'Failed sign-in attempt for unknown@example.com', at: ago(2, 22) },
+    { id: 'a-f3', by: 'system', action: 'Failed sign-in attempt for unknown@example.com', at: ago(2, 22) },
+  );
+  audit.sort((a, b) => b.at.localeCompare(a.at));
+
   return {
     version: SEED_VERSION, roles, users, categories, docs, payments, caseCategories, cases, statusChanges, comments, extensions,
-    preports, feedback: fb, notifications, audit,
+    preports, feedback: fb, notifications, audit, appointments, ratings, events, hearings, caseDocs, tasks, reviewComments,
     settings: { libraryFee: 200, telebirrCode: '5 1 7 6 2 0', telebirrName: 'South Omo Zone Justice Department', accessDays: 365, dueSoonDays: 7, orgName: 'South Omo Zone Justice Department' },
   };
 }

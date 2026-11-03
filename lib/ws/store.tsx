@@ -1,13 +1,16 @@
 'use client';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { seedData, SEED_VERSION } from './seed';
-import type { Case, CaseStatus, LibCategory, LibDoc, Payment, Permission, PReport, Role, Settings, User, WSData } from './types';
+import type { Appointment, Case, CaseDoc, CaseStatus, Hearing, LibCategory, LibDoc, Payment, Permission, PReport, PublicEvent, Role, Settings, User, UserPrefs, WSData } from './types';
+import { NOTIFY_EVENTS } from './types';
 
 const KEY = 'sojp-workspace', SESSION = 'sojp-session';
 const DAY = 86400000;
 const uid = (p: string) => p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const nowIso = () => new Date().toISOString();
 type Result = { ok: true; id?: string } | { ok: false; error: string };
+
+export function defaultPrefs(): UserPrefs { return { lang: 'en', theme: 'light', textSize: 100, notify: Object.fromEntries(NOTIFY_EVENTS.map(e => [e, { app: true, email: e !== 'Library approvals', sms: e === 'SLA due soon / overdue' || e === 'Hearing reminders' }])) }; }
 
 export function isOverdue(c: Case, at = Date.now()) { return c.status !== 'Closed' && new Date(c.dueAt).getTime() < at; }
 export function daysLeft(c: Case, at = Date.now()) { return Math.ceil((new Date(c.dueAt).getTime() - at) / DAY); }
@@ -54,7 +57,7 @@ function useWorkspaceState() {
   const actions = {
     login(email: string, password: string): Result {
       const u = data?.users.find(x => x.email.toLowerCase() === email.trim().toLowerCase());
-      if (!u || u.password !== password) return { ok: false, error: 'Incorrect email or password.' };
+      if (!u || u.password !== password) { mutate(d => withAudit(d, 'system', `Failed sign-in attempt for ${email.trim().toLowerCase().slice(0, 80)}`)); return { ok: false, error: 'Incorrect email or password.' }; }
       if (u.status !== 'active') return { ok: false, error: 'This account is deactivated. Contact the administrator.' };
       setUserId(u.id);
       mutate(d => withAudit({ ...d, users: d.users.map(x => x.id === u.id ? { ...x, lastLogin: nowIso() } : x) }, u.id, 'Signed in'));
@@ -205,6 +208,71 @@ function useWorkspaceState() {
     },
     addCaseCategory(name: string, slaDays: number) { mutate(d => withAudit({ ...d, caseCategories: [...d.caseCategories, { id: uid('cc'), name, slaDays, updatedAt: nowIso(), updatedBy: me }] }, me, `Added case category ${name} (SLA ${slaDays} days)`)); },
 
+
+    // ---------- v6 features ----------
+    bookAppointment(a: Omit<Appointment, 'id' | 'code' | 'status' | 'createdAt'>): string {
+      const code = 'LA-' + Math.floor(1000 + Math.random() * 9000);
+      mutate(d => notify(withAudit({ ...d, appointments: [...d.appointments, { ...a, id: uid('ap'), code, status: 'booked', createdAt: nowIso() }] }, 'system', `Legal aid appointment ${code} booked for ${a.office}`),
+        usersWith(d, 'appointments.manage'), `New legal aid appointment ${code}: ${a.office}, ${a.date} ${a.time}.`, '/dashboard/appointments'));
+      return code;
+    },
+    updateAppointment(id: string, p: Partial<Appointment>) { mutate(d => withAudit({ ...d, appointments: d.appointments.map(x => x.id === id ? { ...x, ...p } : x) }, me, `Updated appointment ${d.appointments.find(x => x.id === id)?.code}${p.status ? ' → ' + p.status : ''}`)); },
+    addRating(r: { service: string; office: string; stars: number; comment: string }) { mutate(d => ({ ...d, ratings: [{ ...r, id: uid('rt'), at: nowIso() }, ...d.ratings] })); },
+    saveEvent(e: Omit<PublicEvent, 'id'> & { id?: string }) { mutate(d => withAudit({ ...d, events: e.id ? d.events.map(x => x.id === e.id ? { ...x, ...e } as PublicEvent : x) : [...d.events, { ...e, id: uid('ev') }] }, me, `${e.id ? 'Updated' : 'Added'} event “${e.title}”`)); },
+    deleteEvent(id: string) { mutate(d => withAudit({ ...d, events: d.events.filter(x => x.id !== id) }, me, 'Deleted public event')); },
+    saveHearing(h: Omit<Hearing, 'id' | 'createdBy'> & { id?: string }) {
+      const c = data?.cases.find(x => x.id === h.caseId);
+      mutate(d => {
+        let x = withAudit({ ...d, hearings: h.id ? d.hearings.map(z => z.id === h.id ? { ...z, ...h } as Hearing : z) : [...d.hearings, { ...h, id: uid('hr'), createdBy: me }] }, me, `${h.id ? 'Updated' : 'Scheduled'} hearing for ${c?.caseNo} on ${h.date}`);
+        if (!h.id && c && c.prosecutorId !== me) x = notify(x, [c.prosecutorId], `Hearing scheduled for ${c.caseNo} on ${h.date} ${h.time}.`, '/dashboard/calendar');
+        return x;
+      });
+    },
+    deleteHearing(id: string) { mutate(d => withAudit({ ...d, hearings: d.hearings.filter(x => x.id !== id) }, me, 'Removed a hearing')); },
+    addCaseDoc(caseId: string, f: { docType: CaseDoc['docType']; title: string; url: string; fileName: string; size: number; note: string }, existingId?: string) {
+      mutate(d => {
+        const c = d.cases.find(x => x.id === caseId);
+        if (existingId) return withAudit({ ...d, caseDocs: d.caseDocs.map(x => x.id === existingId ? { ...x, versions: [...x.versions, { v: x.versions.length + 1, url: f.url, fileName: f.fileName, size: f.size, by: me, at: nowIso(), note: f.note || 'New version' }] } : x) }, me, `Uploaded new version of “${f.title}” to ${c?.caseNo}`);
+        return withAudit({ ...d, caseDocs: [...d.caseDocs, { id: uid('cd'), caseId, docType: f.docType, title: f.title, versions: [{ v: 1, url: f.url, fileName: f.fileName, size: f.size, by: me, at: nowIso(), note: f.note || 'Initial upload' }] }] }, me, `Uploaded ${f.docType.toLowerCase()} to ${c?.caseNo}`);
+      });
+    },
+    addTask(title: string, due?: string) { mutate(d => ({ ...d, tasks: [{ id: uid('tk'), userId: me, title, due, done: false, createdAt: nowIso() }, ...d.tasks] })); },
+    toggleTask(id: string) { mutate(d => ({ ...d, tasks: d.tasks.map(t => t.id === id ? { ...t, done: !t.done } : t) })); },
+    deleteTask(id: string) { mutate(d => ({ ...d, tasks: d.tasks.filter(t => t.id !== id) })); },
+    requestChanges(docId: string, body: string) {
+      mutate(d => {
+        const doc = d.docs.find(x => x.id === docId)!;
+        const x = withAudit({ ...d, docs: d.docs.map(z => z.id === docId ? { ...z, status: 'changes_requested', reviewNote: body, reviewedBy: me } : z), reviewComments: [...d.reviewComments, { id: uid('rc'), docId, by: me, body, at: nowIso() }] }, me, `Requested changes on “${doc.title}”`);
+        return notify(x, [doc.uploadedBy], `Changes requested on “${doc.title}”: ${body.slice(0, 80)}`, '/dashboard/library/contribute');
+      });
+    },
+    addReviewComment(docId: string, body: string) {
+      mutate(d => {
+        const doc = d.docs.find(x => x.id === docId)!;
+        const to = me === doc.uploadedBy ? usersWith(d, 'library.approve') : [doc.uploadedBy];
+        return notify({ ...d, reviewComments: [...d.reviewComments, { id: uid('rc'), docId, by: me, body, at: nowIso() }] }, to, `New comment on “${doc.title}”.`, me === doc.uploadedBy ? '/dashboard/library/approvals?tab=contributions' : '/dashboard/library/contribute');
+      });
+    },
+    resubmitDoc(docId: string, f: { url: string; fileName: string; size: number } | null, note: string) {
+      mutate(d => {
+        const doc = d.docs.find(x => x.id === docId)!;
+        let x = withAudit({ ...d, docs: d.docs.map(z => z.id === docId ? { ...z, ...(f || {}), status: 'pending', version: (z.version || 1) + 1, createdAt: nowIso() } : z), reviewComments: note ? [...d.reviewComments, { id: uid('rc'), docId, by: me, body: note, at: nowIso() }] : d.reviewComments }, me, `Resubmitted “${doc.title}” (version ${(doc.version || 1) + 1})`);
+        x = notify(x, usersWith(d, 'library.approve'), `${user?.name} resubmitted “${doc.title}”.`, '/dashboard/library/approvals?tab=contributions');
+        return x;
+      });
+    },
+    updatePrefs(p: Partial<UserPrefs>) { mutate(d => ({ ...d, users: d.users.map(u => u.id === me ? { ...u, prefs: { ...defaultPrefs(), ...(u.prefs || {}), ...p } } : u) })); },
+    updateProfileExtra(p: { researchArea?: string; bio?: string }) { mutate(d => ({ ...d, users: d.users.map(u => u.id === me ? { ...u, ...p } : u) })); },
+    exportBackup(): string { mutate(d => withAudit({ ...d, lastBackupAt: nowIso() }, me, 'Exported a full data backup')); return JSON.stringify({ ...data, lastBackupAt: nowIso() }, null, 1); },
+    importBackup(json: string): Result {
+      try {
+        const d = JSON.parse(json) as WSData;
+        if (d.version !== SEED_VERSION || !Array.isArray(d.users) || !Array.isArray(d.cases)) return { ok: false, error: 'This file is not a backup from this portal version.' };
+        setData(withAudit(d, me, 'Restored data from a backup file'));
+        return { ok: true };
+      } catch { return { ok: false, error: 'Could not read the backup file.' }; }
+    },
+
     // Periodic reports
     submitReport(r: Omit<PReport, 'id' | 'prosecutorId' | 'submittedAt' | 'status'>) {
       mutate(d => notify(withAudit({ ...d, preports: [{ ...r, id: uid('pr'), prosecutorId: me, submittedAt: nowIso(), status: 'Submitted' }, ...d.preports] }, me, `Submitted ${r.period.toLowerCase()} report (${r.periodLabel})`),
@@ -217,7 +285,8 @@ function useWorkspaceState() {
     },
   };
 
-  return { ready: !!data, data: data!, user, role, can, hasLibraryAccess, actions, userName: (id?: string) => data?.users.find(u => u.id === id)?.name || '—' };
+  const prefs: UserPrefs = { ...defaultPrefs(), ...(user?.prefs || {}) };
+  return { ready: !!data, data: data!, user, role, can, hasLibraryAccess, actions, prefs, userName: (id?: string) => id === 'system' ? 'System' : data?.users.find(u => u.id === id)?.name || '—' };
 }
 
 type WS = ReturnType<typeof useWorkspaceState>;

@@ -3,8 +3,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Bell, BookOpen, BookUp, Briefcase, ChartColumn, CheckSquare, ClipboardList, FilePlus2, FolderCog, Globe, KeyRound, LayoutDashboard,
-  LogOut, Scale, ScrollText, Settings2, ShieldCheck, Timer, UserCircle2, Users, Wallet,
+  Activity, Bell, BookOpen, BookUp, Briefcase, CalendarCheck, CalendarDays, ChartColumn, CheckSquare, ClipboardList, FilePlus2, FolderCog, Globe, KeyRound, LayoutDashboard,
+  ListTodo, LogOut, Map as MapIcon, Newspaper, Scale, ScrollText, Settings2, ShieldCheck, Shuffle, Star, Timer, TrendingUp, UserCircle2, Users, Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
@@ -18,11 +18,22 @@ import { CaseList, CaseNew, CaseDetail, SlaSettings } from './cases';
 import { PeriodicReports, PeriodicReportDetail } from './preports';
 import { UsersPage, RolesPage, AuditPage, SettingsPage, ProfilePage, NotificationsPage } from './admin';
 import { ReportsPage } from './analytics';
+import { CaseMapPage, DigestPage, HearingCalendarPage, PerformancePage, TasksPage, WorkloadPage, useAutoTasks } from './prosecution-extra';
+import { DocDetailPage, ResearcherProfile } from './library-extra';
+import { AppointmentsPage, EventsAdminPage, GlobalSearch, OfflineBanner, SystemHealthPage } from './system';
+import { translate } from '@/lib/ws/i18n';
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; show: boolean; badge?: number };
 
 export default function Workspace() {
   const ws = useWS();
+  const autoTaskList = useAutoTasks();
+  useEffect(() => {
+    const html = document.documentElement;
+    html.style.fontSize = ws.prefs.textSize === 100 ? '' : ws.prefs.textSize + '%';
+    document.body.dataset.wsTheme = ws.prefs.theme;
+    return () => { html.style.fontSize = ''; delete document.body.dataset.wsTheme; };
+  }, [ws.prefs.textSize, ws.prefs.theme]);
   const path = usePathname() || '/dashboard';
   const router = useRouter();
   const parts = path.split('/').filter(Boolean).slice(1);
@@ -42,11 +53,13 @@ export default function Workspace() {
   const unread = data.notifications.filter(n => n.userId === user.id && !n.read).length;
   const anyReport = (['reports.system', 'reports.library', 'reports.cases', 'reports.own'] as Permission[]).some(can);
   const pendingReview = data.preports.filter(r => r.status === 'Submitted').length;
+  const autoTasks = autoTaskList.filter(t => t.tone === 'red').length;
 
   const groups: [string, NavItem[]][] = [
     ['Overview', [
       { href: '/dashboard', label: 'My dashboard', icon: <LayoutDashboard />, show: true },
       { href: '/dashboard/notifications', label: 'Notifications', icon: <Bell />, show: true, badge: unread },
+      { href: '/dashboard/tasks', label: 'My tasks', icon: <ListTodo />, show: can('cases.viewAll') || can('cases.viewOwn') || can('preports.review'), badge: autoTasks },
     ]],
     ['Digital library', [
       { href: '/dashboard/library', label: 'Browse library', icon: <BookOpen />, show: true },
@@ -58,8 +71,19 @@ export default function Workspace() {
     ['Prosecution', [
       { href: '/dashboard/cases', label: can('cases.viewAll') ? 'All cases' : 'My cases', icon: <Briefcase />, show: can('cases.viewAll') || can('cases.viewOwn') },
       { href: '/dashboard/cases/new', label: 'New case', icon: <FilePlus2 />, show: can('cases.create') },
+      { href: '/dashboard/calendar', label: 'Hearing calendar', icon: <CalendarDays />, show: can('cases.viewAll') || can('cases.viewOwn') },
       { href: '/dashboard/sla', label: 'SLA by category', icon: <Timer />, show: can('sla.manage') },
       { href: '/dashboard/periodic-reports', label: can('preports.review') ? 'Prosecutor reports' : 'My reports', icon: <ClipboardList />, show: can('preports.submit') || can('preports.review'), badge: can('preports.review') ? pendingReview : 0 },
+    ]],
+    ['Director', [
+      { href: '/dashboard/performance', label: 'Performance', icon: <TrendingUp />, show: can('cases.viewAll') },
+      { href: '/dashboard/workload', label: 'Workload balancing', icon: <Shuffle />, show: can('cases.viewAll') && can('cases.create') },
+      { href: '/dashboard/case-map', label: 'Case map', icon: <MapIcon />, show: can('cases.viewAll') },
+      { href: '/dashboard/digest', label: 'Weekly digest', icon: <Newspaper />, show: can('preports.review') },
+    ]],
+    ['Citizen services', [
+      { href: '/dashboard/appointments', label: 'Appointments', icon: <CalendarCheck />, show: can('appointments.manage'), badge: data.appointments.filter(a => a.status === 'booked').length },
+      { href: '/dashboard/events', label: 'Events & ratings', icon: <Star />, show: can('events.manage') },
     ]],
     ['Reports', [{ href: '/dashboard/reports', label: 'Reports & export', icon: <ChartColumn />, show: anyReport }]],
     ['Administration', [
@@ -67,6 +91,7 @@ export default function Workspace() {
       { href: '/dashboard/roles', label: 'Roles & permissions', icon: <KeyRound />, show: can('roles.manage') },
       { href: '/dashboard/audit', label: 'Audit log', icon: <ScrollText />, show: can('audit.view') },
       { href: '/dashboard/settings', label: 'Settings', icon: <Settings2 />, show: can('settings.manage') },
+      { href: '/dashboard/system', label: 'System health', icon: <Activity />, show: can('settings.manage') },
       { href: '/admin', label: 'Website CMS & complaints', icon: <Globe />, show: can('cms.access') },
     ]],
     ['Account', [{ href: '/dashboard/profile', label: 'My profile', icon: <UserCircle2 />, show: true }]],
@@ -82,12 +107,22 @@ export default function Workspace() {
     case 'profile': content = <ProfilePage />; break;
     case 'library':
       content = parts[1] === 'manage' ? deny(can('library.manage'), <LibraryManage />) : parts[1] === 'approvals' ? deny(can('library.approve'), <LibraryApprovals />)
-        : parts[1] === 'access' ? <LibraryAccess /> : parts[1] === 'contribute' ? deny(isResearcher, <LibraryContribute />) : <LibraryBrowse />;
+        : parts[1] === 'access' ? <LibraryAccess /> : parts[1] === 'contribute' ? deny(isResearcher, <LibraryContribute />) : parts[1] === 'doc' && parts[2] ? <DocDetailPage id={parts[2]} /> : <LibraryBrowse />;
       break;
     case 'cases':
       content = !(can('cases.viewAll') || can('cases.viewOwn')) ? <Denied /> : parts[1] === 'new' ? deny(can('cases.create'), <CaseNew />) : parts[1] ? <CaseDetail id={parts[1]} /> : <CaseList />;
       break;
     case 'sla': content = deny(can('sla.manage'), <SlaSettings />); break;
+    case 'calendar': content = deny(can('cases.viewAll') || can('cases.viewOwn'), <HearingCalendarPage />); break;
+    case 'tasks': content = <TasksPage />; break;
+    case 'performance': content = deny(can('cases.viewAll'), <PerformancePage />); break;
+    case 'workload': content = deny(can('cases.viewAll') && can('cases.create'), <WorkloadPage />); break;
+    case 'case-map': content = deny(can('cases.viewAll'), <CaseMapPage />); break;
+    case 'digest': content = deny(can('preports.review'), <DigestPage />); break;
+    case 'appointments': content = deny(can('appointments.manage'), <AppointmentsPage />); break;
+    case 'events': content = deny(can('events.manage'), <EventsAdminPage />); break;
+    case 'system': content = deny(can('settings.manage'), <SystemHealthPage />); break;
+    case 'researchers': content = parts[1] ? <ResearcherProfile id={parts[1]} /> : <Denied notFound />; break;
     case 'periodic-reports': content = deny(can('preports.submit') || can('preports.review'), parts[1] ? <PeriodicReportDetail id={parts[1]} /> : <PeriodicReports />); break;
     case 'reports': content = deny(anyReport, <ReportsPage />); break;
     case 'users': content = deny(can('users.manage'), <UsersPage />); break;
@@ -97,18 +132,20 @@ export default function Workspace() {
     default: content = <Denied notFound />;
   }
 
-  return <SidebarProvider>
+  const tr = (x: string) => translate(ws.prefs.lang, x);
+  return <div className="ws-root" data-theme={ws.prefs.theme} lang={ws.prefs.lang}><SidebarProvider>
     <Sidebar className="justice-sidebar ws-sidebar">
-      <SidebarHeader><Link className="admin-brand" href="/dashboard"><img src="/justice-logo.png" alt="" width={34} height={34} /><span>South Omo Justice<small>Staff & researcher portal</small></span></Link></SidebarHeader>
+      <SidebarHeader><Link className="admin-brand" href="/dashboard"><img src="/justice-logo.png" alt="" width={34} height={34} /><span>South Omo Justice<small>{tr('Staff & researcher portal')}</small></span></Link></SidebarHeader>
       <SidebarContent>
-        {groups.map(([g, items]) => { const vis = items.filter(i => i.show); if (!vis.length) return null; return <div key={g} className="ws-nav-group"><div className="sidebar-caption">{g}</div><SidebarMenu>{vis.map(i => <SidebarMenuItem key={i.href}><NavLink item={i} active={active?.href === i.href} /></SidebarMenuItem>)}</SidebarMenu></div>; })}
+        {groups.map(([g, items]) => { const vis = items.filter(i => i.show); if (!vis.length) return null; return <div key={g} className="ws-nav-group"><div className="sidebar-caption">{tr(g)}</div><SidebarMenu>{vis.map(i => <SidebarMenuItem key={i.href}><NavLink item={{ ...i, label: tr(i.label) }} active={active?.href === i.href} /></SidebarMenuItem>)}</SidebarMenu></div>; })}
       </SidebarContent>
-      <SidebarFooter><div className="ws-sidebar-user"><Avatar name={user.name} /><div><b>{user.name}</b><small>{ws.role?.name}</small></div></div><Link href="/" className="ws-sidebar-link"><Globe size={15} />Public website</Link></SidebarFooter>
+      <SidebarFooter><div className="ws-sidebar-user"><Avatar name={user.name} /><div><b>{user.name}</b><small>{ws.role?.name}</small></div></div><Link href="/" className="ws-sidebar-link"><Globe size={15} />{tr('Public website')}</Link></SidebarFooter>
     </Sidebar>
     <SidebarInset className="ws-inset">
       <header className="ws-topbar">
         <SidebarTrigger className="ws-trigger" />
-        <span className="ws-crumb">{active?.label || 'Workspace'}</span>
+        <span className="ws-crumb">{tr(active?.label || 'Workspace')}</span>
+        <GlobalSearch links={flat.filter(i => i.href.startsWith('/dashboard')).map(i => ({ href: i.href, label: i.label }))} />
         <div className="ws-topbar-right">
           <span className="ws-role-chip"><ShieldCheck size={14} />{ws.role?.name}</span>
           <Link href="/dashboard/notifications" className="ws-bell" aria-label={`Notifications (${unread} unread)`}><Bell size={19} />{unread > 0 && <i>{unread}</i>}</Link>
@@ -116,11 +153,12 @@ export default function Workspace() {
           <button className="ws-icon-btn" aria-label="Sign out" title="Sign out" onClick={() => { ws.actions.logout(); router.push('/dashboard/login'); }}><LogOut size={18} /></button>
         </div>
       </header>
+      <OfflineBanner />
       <main className="ws-main">{content}</main>
       <div className="ws-foot">Demonstration build · sample data is stored in this browser only · <button onClick={() => { if (confirm('Reset all demo data to the original sample data?')) { ws.actions.resetDemo(); toast.success('Demo data reset'); } }}>Reset demo data</button></div>
     </SidebarInset>
 
-  </SidebarProvider>;
+  </SidebarProvider></div>;
 }
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {

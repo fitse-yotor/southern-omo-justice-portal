@@ -1,7 +1,9 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BookUp, CheckCircle2, ChevronRight, Clock, Eye, FileText, Folder, FolderOpen, FolderPlus, Image as ImageIcon, Lock, Pencil, Plus, Search, Trash2, Upload, Wallet, XCircle, Download } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { RequestChangesDialog, ResubmitDialog, ReviewThread } from './library-extra';
+import { BookUp, CheckCircle2, MessageSquare, ChevronRight, Clock, Eye, FileText, Folder, FolderOpen, FolderPlus, Image as ImageIcon, Lock, Pencil, Plus, Search, Trash2, Upload, Wallet, XCircle, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWS } from '@/lib/ws/store';
 import { PdfView } from './pdf-view';
@@ -18,11 +20,19 @@ export function useQueryParam(name: string) {
 /* ---------------- Explorer (shared by public site and workspace) ---------------- */
 export function LibraryExplorer({ fullAccess, initialDoc, publicMode }: { fullAccess: boolean; initialDoc?: string | null; publicMode?: boolean }) {
   const { data } = useWS();
+  const router = useRouter();
   const [cat, setCat] = useState<string>('all'), [q, setQ] = useState(''), [type, setType] = useState('all'), [open, setOpen] = useState<LibDoc | null>(null);
+  const [year, setYear] = useState('all'), [author, setAuthor] = useState('all');
+  const qParam = useQueryParam('q');
+  useEffect(() => { if (qParam) setQ(qParam); }, [qParam]);
   useEffect(() => { if (initialDoc) { const d = data.docs.find(x => x.id === initialDoc); if (d) setOpen(d); } }, [initialDoc]); // eslint-disable-line react-hooks/exhaustive-deps
   const roots = data.categories.filter(c => !c.parentId);
   const inCat = (d: LibDoc) => cat === 'all' || d.categoryId === cat || data.categories.find(c => c.id === d.categoryId)?.parentId === cat;
-  const docs = data.docs.filter(d => d.status === 'published' && inCat(d) && (type === 'all' || d.type === type) && (d.title + ' ' + d.description + ' ' + d.author).toLowerCase().includes(q.toLowerCase()))
+  const published = data.docs.filter(d => d.status === 'published');
+  const years = Array.from(new Set(published.map(d => d.year))).sort().reverse(), authors = Array.from(new Set(published.map(d => d.author))).sort();
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = (d: LibDoc) => [d.title, d.description, d.author, d.text || '', (d.keywords || []).join(' '), d.fileName].join(' ').toLowerCase();
+  const docs = published.filter(d => inCat(d) && (type === 'all' || d.type === type) && (year === 'all' || d.year === year) && (author === 'all' || d.author === author) && terms.every(t => hay(d).includes(t)))
     .sort((a, b) => (b.publishedAt || '').localeCompare(a.publishedAt || ''));
   const count = (id: string) => data.docs.filter(d => d.status === 'published' && (d.categoryId === id || data.categories.find(c => c.id === d.categoryId)?.parentId === id)).length;
   const current = data.categories.find(c => c.id === cat);
@@ -38,13 +48,16 @@ export function LibraryExplorer({ fullAccess, initialDoc, publicMode }: { fullAc
     </aside>
     <div className="lib-main">
       <div className="lib-toolbar">
-        <div className="lib-search"><Search size={17} /><input placeholder="Search title, author or description" value={q} onChange={e => setQ(e.target.value)} aria-label="Search library" /></div>
+        <div className="lib-search"><Search size={17} /><input placeholder="Search title, author, keywords or text" value={q} onChange={e => setQ(e.target.value)} aria-label="Search library" /></div>
         <Sel aria-label="File type" value={type} onChange={setType} options={[['all', 'All types'], ['pdf', 'PDF'], ['word', 'Word'], ['video', 'Video']]} />
+        <Sel aria-label="Year" value={year} onChange={setYear} options={[['all', 'All years'], ...years.map(y => [y, y] as [string, string])]} />
+        <Sel aria-label="Author" value={author} onChange={setAuthor} options={[['all', 'All authors'], ...authors.map(a => [a, a] as [string, string])]} />
+        {(q || type !== 'all' || year !== 'all' || author !== 'all') && <button className="ws-btn sm ghost" onClick={() => { setQ(''); setType('all'); setYear('all'); setAuthor('all'); }}>Clear filters</button>}
         <select className="ws-input lib-cat-mobile" aria-label="Folder" value={cat} onChange={e => setCat(e.target.value)}><option value="all">All folders</option>{data.categories.map(c => <option key={c.id} value={c.id}>{c.parentId ? '— ' : ''}{c.name}</option>)}</select>
       </div>
       <div className="lib-crumb"><FolderOpen size={16} />{current ? <>{current.parentId && <>{data.categories.find(c => c.id === current.parentId)?.name}<ChevronRight size={13} /></>}<b>{current.name}</b></> : <b>All documents</b>}<span>{docs.length} item{docs.length === 1 ? '' : 's'}</span></div>
       {current?.description && <p className="lib-desc">{current.description}</p>}
-      {docs.length ? <div className="lib-grid">{docs.map(d => <button key={d.id} className={'lib-card t-' + d.type + (locked(d) ? ' locked' : '')} onClick={() => setOpen(d)}>
+      {docs.length ? <div className="lib-grid">{docs.map(d => <button key={d.id} className={'lib-card t-' + d.type + (locked(d) ? ' locked' : '')} onClick={() => locked(d) ? setOpen(d) : router.push('/dashboard/library/doc/' + d.id)}>
         <div className="lib-card-top"><DocIcon type={d.type} size={26} /><span className="lib-type">{d.type === 'word' ? 'WORD' : d.type.toUpperCase()}</span>{locked(d) ? <Pill tone="gold"><Lock size={12} />Researchers</Pill> : d.visibility === 'researchers' ? <Pill tone="teal">Researchers</Pill> : <Pill tone="green">Public</Pill>}</div>
         <h3>{d.title}</h3><p>{d.description}</p>
         <div className="lib-meta"><span>{d.author}</span><span>{d.year} · {fmtSize(d.size)}</span>{d.source === 'researcher' && <span className="contrib">Researcher contribution</span>}</div>
@@ -169,7 +182,7 @@ function FolderRow({ c, onEdit, onAddSub }: { c: { id: string; name: string; des
 /* ---------------- Library admin: approvals ---------------- */
 type Decision = { kind: 'pay' | 'doc'; id: string; approve: boolean } | null;
 type Detail = { kind: 'pay' | 'doc'; id: string } | null;
-const STATUS_TABS = [['pending', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['all', 'All']] as const;
+const STATUS_TABS = [['pending', 'Pending'], ['changes_requested', 'Changes requested'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['all', 'All']] as const;
 
 export function LibraryApprovals() {
   const { data, userName } = useWS();
@@ -177,7 +190,7 @@ export function LibraryApprovals() {
   const [tab, setTab] = useState<'payments' | 'contributions'>('payments');
   useEffect(() => { if (tabParam === 'contributions') setTab('contributions'); }, [tabParam]);
   const [status, setStatus] = useState<string>('all'), [q, setQ] = useState('');
-  const [detail, setDetail] = useState<Detail>(null), [decision, setDecision] = useState<Decision>(null);
+  const [detail, setDetail] = useState<Detail>(null), [decision, setDecision] = useState<Decision>(null), [changes, setChanges] = useState<string | null>(null);
 
   const contribs = data.docs.filter(d => d.source === 'researcher');
   const docStatus = (s: LibDoc['status']) => (s === 'published' ? 'approved' : s);
@@ -225,20 +238,21 @@ export function LibraryApprovals() {
             <td data-label="Researcher">{userName(d.uploadedBy)}</td>
             <td data-label="Folder">{data.categories.find(c => c.id === d.categoryId)?.name}</td>
             <td data-label="Submitted">{fmtDate(d.createdAt)}<small className="ws-sub">{ago(d.createdAt)}</small></td>
-            <td data-label="Status"><StatusPill status={docStatus(d.status)} /></td>
-            <td className="ws-actions"><RowActions pending={d.status === 'pending'} onView={() => setDetail({ kind: 'doc', id: d.id })} onApprove={() => setDecision({ kind: 'doc', id: d.id, approve: true })} onReject={() => setDecision({ kind: 'doc', id: d.id, approve: false })} /></td>
+            <td data-label="Status"><StatusPill status={docStatus(d.status) === 'changes_requested' ? 'changes requested' : docStatus(d.status)} />{(d.version || 1) > 1 && <small className="ws-sub">version {d.version}</small>}</td>
+            <td className="ws-actions"><RowActions pending={d.status === 'pending'} onView={() => setDetail({ kind: 'doc', id: d.id })} onApprove={() => setDecision({ kind: 'doc', id: d.id, approve: true })} onReject={() => setDecision({ kind: 'doc', id: d.id, approve: false })} onChanges={() => setChanges(d.id)} /></td>
           </tr>)}</tbody>
         </table>{!docRows.length && <Empty title="No contributions in this view" icon={<CheckCircle2 size={30} />} />}</div>}
     </Panel>
-    <ApprovalDetail detail={detail} onClose={() => setDetail(null)} onDecide={(approve) => detail && setDecision({ ...detail, approve })} />
+    <ApprovalDetail detail={detail} onClose={() => setDetail(null)} onDecide={(approve) => detail && setDecision({ ...detail, approve })} onChanges={id => setChanges(id)} />
+    <RequestChangesDialog docId={changes} onClose={() => { setChanges(null); setDetail(null); }} />
     <DecisionDialog decision={decision} onClose={() => setDecision(null)} onDone={() => { setDecision(null); setDetail(null); }} />
   </>;
 }
 
-function RowActions({ pending, onView, onApprove, onReject }: { pending: boolean; onView: () => void; onApprove: () => void; onReject: () => void }) {
+function RowActions({ pending, onView, onApprove, onReject, onChanges }: { pending: boolean; onView: () => void; onApprove: () => void; onReject: () => void; onChanges?: () => void }) {
   return <div className="ws-act-group">
     <button className="ws-btn sm ghost" onClick={onView}><Eye size={15} />View</button>
-    {pending && <><button className="ws-btn sm" onClick={onApprove}><CheckCircle2 size={15} />Approve</button><button className="ws-btn sm danger ghost" onClick={onReject} aria-label="Reject"><XCircle size={15} />Reject</button></>}
+    {pending && <><button className="ws-btn sm" onClick={onApprove}><CheckCircle2 size={15} />Approve</button>{onChanges && <button className="ws-btn sm ghost" onClick={onChanges} aria-label="Request changes" title="Request changes"><MessageSquare size={15} />Changes</button>}<button className="ws-btn sm danger ghost" onClick={onReject} aria-label="Reject"><XCircle size={15} />Reject</button></>}
   </div>;
 }
 
@@ -257,7 +271,7 @@ export function ReceiptPreview({ url, name }: { url: string; name: string }) {
   </div>;
 }
 
-function ApprovalDetail({ detail, onClose, onDecide }: { detail: Detail; onClose: () => void; onDecide: (approve: boolean) => void }) {
+function ApprovalDetail({ detail, onClose, onDecide, onChanges }: { detail: Detail; onClose: () => void; onDecide: (approve: boolean) => void; onChanges: (id: string) => void }) {
   const { data, userName } = useWS();
   if (!detail) return null;
   if (detail.kind === 'pay') {
@@ -289,7 +303,8 @@ function ApprovalDetail({ detail, onClose, onDecide }: { detail: Detail; onClose
         <h4>Document</h4>
         <dl className="ws-dl"><dt>Title</dt><dd>{d.title}</dd><dt>Description</dt><dd>{d.description || '—'}</dd><dt>Author</dt><dd>{d.author}, {d.year}</dd><dt>Proposed folder</dt><dd>{data.categories.find(c => c.id === d.categoryId)?.name}</dd><dt>File</dt><dd><DocIcon type={d.type} size={15} /> {d.fileName} · {fmtSize(d.size)}</dd><dt>Submitted</dt><dd>{fmtDate(d.createdAt)} ({ago(d.createdAt)})</dd>{d.publishedAt && <><dt>Published</dt><dd>{fmtDate(d.publishedAt)} · {d.visibility === 'public' ? 'All users' : 'Researchers & staff'}</dd></>}</dl>
         {d.reviewNote && <p className="ws-note"><b>Review note:</b> {d.reviewNote}</p>}
-        {d.status === 'pending' && <div className="ws-approval-actions"><button className="ws-btn danger ghost" onClick={() => onDecide(false)}><XCircle size={16} />Reject</button><button className="ws-btn" onClick={() => onDecide(true)}><CheckCircle2 size={16} />Approve & publish</button></div>}
+        <ReviewThread doc={d} />
+        {d.status === 'pending' && <div className="ws-approval-actions"><button className="ws-btn danger ghost" onClick={() => onDecide(false)}><XCircle size={16} />Reject</button><button className="ws-btn ghost" onClick={() => onChanges(d.id)}><MessageSquare size={16} />Request changes</button><button className="ws-btn" onClick={() => onDecide(true)}><CheckCircle2 size={16} />Approve & publish</button></div>}
       </div>
     </div>
   </Modal>;
@@ -377,7 +392,7 @@ export function LibraryAccess() {
 export function LibraryContribute() {
   const { data, user, hasLibraryAccess } = useWS();
   const newParam = useQueryParam('new');
-  const [open, setOpen] = useState(false), [view, setView] = useState<LibDoc | null>(null);
+  const [open, setOpen] = useState(false), [view, setView] = useState<LibDoc | null>(null), [resub, setResub] = useState<LibDoc | null>(null);
   useEffect(() => { if (newParam) setOpen(true); }, [newParam]);
   const mine = useMemo(() => data.docs.filter(d => d.uploadedBy === user!.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [data.docs, user]);
   const access = hasLibraryAccess();
@@ -387,12 +402,14 @@ export function LibraryContribute() {
     </PageHead>
     {!access && <div className="ws-banner warn"><Lock /><div><b>Contributions open after access approval</b><p>Pay the library fee and upload your receipt first.</p></div><Link className="ws-btn sm" href="/dashboard/library/access">Get access</Link></div>}
     {mine.length ? <div className="ws-cards">{mine.map(d => <article key={d.id} className="ws-card">
-      <header><DocIcon type={d.type} size={22} /><div><b>{d.title}</b><small>{data.categories.find(c => c.id === d.categoryId)?.name} · submitted {fmtDate(d.createdAt)}</small></div><StatusPill status={d.status === 'pending' ? 'pending' : d.status} /></header>
+      <header><DocIcon type={d.type} size={22} /><div><b>{d.title}</b><small>{data.categories.find(c => c.id === d.categoryId)?.name} · submitted {fmtDate(d.createdAt)}</small></div><StatusPill status={d.status === 'changes_requested' ? 'changes requested' : d.status} /></header>
       <p>{d.description}</p>
-      {d.reviewNote && <p className="ws-note"><b>Library Admin:</b> {d.reviewNote}</p>}
-      <footer><button className="ws-btn ghost sm" onClick={() => setView(d)}><Eye size={15} />Open</button>{d.status === 'published' && <span className="ws-sub">{d.views} views · {d.downloads} downloads</span>}</footer>
+      {d.reviewNote && d.status !== 'changes_requested' && <p className="ws-note"><b>Library Admin:</b> {d.reviewNote}</p>}
+      {(d.status === 'changes_requested' || d.status === 'pending' || data.reviewComments.some(c => c.docId === d.id)) && <ReviewThread doc={d} canComment={d.status !== 'published' && d.status !== 'rejected'} />}
+      <footer>{d.status === 'changes_requested' && <button className="ws-btn sm" onClick={() => setResub(d)}><Upload size={15} />Upload revised version</button>}<button className="ws-btn ghost sm" onClick={() => setView(d)}><Eye size={15} />Open</button>{d.status === 'published' && <Link className="ws-btn ghost sm" href={'/dashboard/library/doc/' + d.id}>Details</Link>}{d.status === 'published' && <span className="ws-sub">{d.views} views · {d.downloads} downloads</span>}</footer>
     </article>)}</div> : <Empty title="No contributions yet">{access ? 'Use “New contribution” to submit your first document.' : ''}</Empty>}
     <DocForm open={open} contribution onClose={() => setOpen(false)} />
     <DocViewer doc={view} onClose={() => setView(null)} />
+    <ResubmitDialog doc={resub} onClose={() => setResub(null)} />
   </>;
 }
