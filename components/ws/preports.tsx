@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ClipboardList, MessageSquareReply, Plus, Send } from 'lucide-react';
+import { ArrowLeft, ClipboardList, MessageSquareReply, Plus, Send, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWS } from '@/lib/ws/store';
 import type { Period } from '@/lib/ws/types';
 import { Avatar, Empty, F, Modal, PageHead, Panel, Pill, Sel, StatusPill, ago, fmtDate, fmtDateTime } from './ui';
 import { useQueryParam } from './library';
+import { AiSummaryPanel, useAiStatus } from './ai-summary';
 
 const PERIODS: Period[] = ['Daily', 'Weekly', 'Monthly'];
 function defaultLabel(p: Period) {
@@ -20,12 +21,13 @@ export function PeriodicReports() {
   const { data, user, can, userName } = useWS();
   const reviewer = can('preports.review');
   const newParam = useQueryParam('new');
-  const [open, setOpen] = useState(false), [period, setPeriod] = useState('all'), [pros, setPros] = useState('all'), [status, setStatus] = useState('all');
+  const [open, setOpen] = useState(false), [period, setPeriod] = useState('all'), [pros, setPros] = useState('all'), [status, setStatus] = useState('all'), [aiOpen, setAiOpen] = useState(false);
+  const ai = useAiStatus();
   useEffect(() => { if (newParam && can('preports.submit')) setOpen(true); }, [newParam]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = data.preports.filter(r => (reviewer || r.prosecutorId === user!.id) && (period === 'all' || r.period === period) && (pros === 'all' || r.prosecutorId === pros) && (status === 'all' || r.status === status))
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   return <>
-    <PageHead eyebrow="PROSECUTION" title={reviewer ? 'Prosecutor reports' : 'My reports'} actions={can('preports.submit') ? <button className="ws-btn" onClick={() => setOpen(true)}><Plus size={16} />Submit report</button> : undefined}>
+    <PageHead eyebrow="PROSECUTION" title={reviewer ? 'Prosecutor reports' : 'My reports'} actions={can('preports.submit') ? <button className="ws-btn" onClick={() => setOpen(true)}><Plus size={16} />Submit report</button> : reviewer && ai?.enabled ? <button className="ws-btn" onClick={() => setAiOpen(true)} disabled={!list.length}><Sparkles size={16} />AI summary of this list</button> : undefined}>
       {reviewer ? 'Daily, weekly and monthly reports submitted by prosecutors. Open a report to give feedback.' : 'Submit your daily, weekly and monthly reports. The Director reviews each report and gives feedback.'}
     </PageHead>
     <div className="ws-chips">{['all', ...PERIODS].map(p => <button key={p} aria-pressed={period === p} onClick={() => setPeriod(p)}>{p === 'all' ? 'All periods' : p}<em>{data.preports.filter(r => (reviewer || r.prosecutorId === user!.id) && (p === 'all' || r.period === p)).length}</em></button>)}</div>
@@ -46,6 +48,9 @@ export function PeriodicReports() {
         </tr>)}</tbody>
       </table>{!list.length && <Empty title="No reports yet" icon={<ClipboardList size={30} />} />}</div>
     </Panel>
+    {reviewer && <Modal open={aiOpen} onClose={() => setAiOpen(false)} title="AI summary of reports" description={`Summarises the ${Math.min(list.length, 60)} most recent reports matching your filters (${period === 'all' ? 'all periods' : period}${pros !== 'all' ? ', ' + userName(pros) : ''}).`} wide>
+      {aiOpen && <AiSummaryPanel reports={list.slice(0, 60)} mode="period" title={`${period === 'all' ? 'all periods' : period + ' reports'}${pros !== 'all' ? ' of ' + userName(pros) : ''}`} />}
+    </Modal>}
     <SubmitReport open={open} initial={(PERIODS as string[]).includes(newParam || '') ? newParam as Period : 'Daily'} onClose={() => setOpen(false)} />
   </>;
 }
@@ -99,6 +104,7 @@ export function PeriodicReportDetail({ id }: { id: string }) {
         </Panel>
       </div>
       <aside className="ws-detail-side">
+        {can('preports.review') && <AiSummaryPanel reports={[r]} mode="report" onUse={t => setFb(t)} compact />}
         <Panel title="Director feedback">
           {feedback.length ? <ul className="ws-comments">{feedback.map(f => <li key={f.id}><Avatar name={userName(f.by)} size={30} /><div><b>{userName(f.by)}</b><small>{fmtDate(f.at)}</small><p>{f.body}</p></div></li>)}</ul> : <Empty title="No feedback yet">{can('preports.review') ? 'Add your feedback below.' : 'The Director has not reviewed this report yet.'}</Empty>}
           {can('preports.review') && <form className="ws-form" onSubmit={e => { e.preventDefault(); if (!fb.trim()) return; actions.addFeedback(id, fb.trim()); setFb(''); toast.success('Feedback sent to ' + p?.name); }}>
