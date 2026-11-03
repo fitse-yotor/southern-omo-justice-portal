@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { ollamaChat, ollamaConfig, OllamaError } from '@/lib/ai/ollama';
+import { AIError, chat } from '@/lib/ai/providers';
+import { activeConfig, takeDailyQuota } from '@/lib/ai/settings';
 import { redact } from '@/lib/ai/redact';
 import { allow } from '@/lib/ai/rate-limit';
 
@@ -40,8 +41,9 @@ const SYSTEM = (lang: 'en' | 'am') => [
 ].join('\n');
 
 export async function POST(req: NextRequest) {
-  const cfg = ollamaConfig();
-  if (!cfg) return NextResponse.json({ error: 'AI summaries are not configured. Set OLLAMA_API_KEY.' }, { status: 503 });
+  const active = await activeConfig();
+  if (!active) return NextResponse.json({ error: 'AI summaries are switched off or not configured. A Super Admin can set them up in Settings → AI summaries.' }, { status: 503 });
+  const { cfg, settings } = active;
 
   // Only accept calls from this site's own pages.
   const origin = req.headers.get('origin');
@@ -54,6 +56,8 @@ export async function POST(req: NextRequest) {
   try { body = Body.parse(await req.json()); } catch (e) {
     return NextResponse.json({ error: 'Invalid request', detail: e instanceof z.ZodError ? e.issues.slice(0, 3) : undefined }, { status: 400 });
   }
+
+  if (!(await takeDailyQuota(settings.dailyLimit))) return NextResponse.json({ error: `The daily limit of ${settings.dailyLimit} AI summaries is reached. It resets tomorrow.`, kind: 'rate_limit' }, { status: 429 });
 
   // Redact before anything leaves the server.
   const names = [...body.reports.map(r => r.author), ...body.redactNames];
@@ -79,7 +83,7 @@ export async function POST(req: NextRequest) {
   ].join('\n');
 
   try {
-    const out = await ollamaChat(cfg, [{ role: 'system', content: SYSTEM(body.lang) }, { role: 'user', content: userMsg }], { maxTokens: body.mode === 'period' ? 1200 : 800 });
+    const out = await chat(cfg, SYSTEM(body.lang), userMsg);
     // Map placeholders back to real names for the Director (only on our side).
     let summary = out.content;
     for (const [name, ph] of Object.entries(map)) summary = summary.split(ph).join(name);
@@ -89,7 +93,7 @@ export async function POST(req: NextRequest) {
       redacted: Object.keys(map).length,
     });
   } catch (e) {
-    if (e instanceof OllamaError) return NextResponse.json({ error: e.message, kind: e.kind }, { status: e.status });
+    if (e instanceof AIError) return NextResponse.json({ error: e.message, kind: e.kind }, { status: e.status });
     return NextResponse.json({ error: 'Unexpected error while creating the summary.' }, { status: 500 });
   }
 }

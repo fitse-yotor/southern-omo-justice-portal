@@ -51,3 +51,6 @@ temp_interactive_push.bat
 # build info
 *.tsbuildinfo
 !.env.example
+
+# AI settings store (local)
+/.data/

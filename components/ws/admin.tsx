@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Bell, CheckCheck, KeyRound, Pencil, Plus, Save, Search, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWS } from '@/lib/ws/store';
+import { AiSettingsPanel } from './ai-settings';
 import { OFFICES, PERMISSIONS, type Permission, type Role, type User } from '@/lib/ws/types';
 import { Avatar, DataTable, Empty, F, Modal, PageHead, Panel, Pill, Sel, StatusPill, ago, fmtDate, fmtDateTime } from './ui';
 
@@ -106,7 +107,7 @@ export function SettingsPage() {
   const { data, actions } = useWS();
   const [s, setS] = useState(data.settings);
   return <>
-    <PageHead eyebrow="SUPER ADMIN" title="System settings">Library fee, Telebirr merchant details and SLA alert thresholds.</PageHead>
+    <PageHead eyebrow="SUPER ADMIN" title="System settings">Library fee, Telebirr merchant details, SLA alert thresholds and AI summaries.</PageHead>
     <form className="ws-dash-grid" onSubmit={e => { e.preventDefault(); actions.saveSettings(s); toast.success('Settings saved'); }}>
       <Panel title="Digital library">
         <div className="ws-grid2">
@@ -125,6 +126,7 @@ export function SettingsPage() {
         <button className="ws-btn"><Save size={16} />Save settings</button>
       </Panel>
     </form>
+    <AiSettingsPanel />
   </>;
 }
 

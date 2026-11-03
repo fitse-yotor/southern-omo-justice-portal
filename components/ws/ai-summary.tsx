@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useWS } from '@/lib/ws/store';
 import type { PReport } from '@/lib/ws/types';
 
-type Status = { enabled: boolean; model?: string; provider?: string };
+type Status = { enabled: boolean; model?: string; provider?: string; defaultLang?: 'en' | 'am' };
 let statusCache: Promise<Status> | null = null;
 function loadStatus() {
   statusCache ||= fetch('/api/ai/status').then(r => r.json()).catch(() => ({ enabled: false }));
@@ -25,9 +25,10 @@ export function AiSummaryPanel({ reports, mode, title, onUse, compact }: { repor
   const [lang, setLang] = useState<'en' | 'am'>('en');
   const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [res, setRes] = useState<Result | null>(null), [text, setText] = useState('');
   const [copied, setCopied] = useState(false);
+  useEffect(() => { if (status?.defaultLang) setLang(status.defaultLang); }, [status?.defaultLang]);
 
   if (!status) return null;
-  if (!status.enabled) return <div className="ai-off"><Sparkles size={16} /><span>AI summaries are switched off. The administrator can enable them by setting <code>OLLAMA_API_KEY</code>.</span></div>;
+  if (!status.enabled) return <div className="ai-off"><Sparkles size={16} /><span>AI summaries are switched off. A Super Admin can set them up in Settings → AI summaries.</span></div>;
 
   const run = async () => {
     setBusy(true); setErr('');
